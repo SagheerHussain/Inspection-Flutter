@@ -300,8 +300,8 @@ class ScheduleController extends GetxController {
   }) async {
     try {
       final storage = GetStorage();
-      final userId = storage.read('USER_ID') ?? '';
-      final userRole = storage.read('USER_ROLE') ?? 'Inspection Engineer';
+      final userId = storage.read('USER_ID')?.toString() ?? storage.read('user_id')?.toString() ?? '';
+      final userRole = storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
       final Map<String, dynamic> body = {
         'telecallingId': telecallingId,

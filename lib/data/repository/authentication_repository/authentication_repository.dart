@@ -38,13 +38,37 @@ class AuthenticationRepository extends GetxController {
   /// Getters
   User? get firebaseUser => _firebaseUser.value;
 
-  String get getUserID => firebaseUser?.uid ?? "";
+  @Deprecated('Use userId instead')
+  String get getUserID => userId;
 
   String get getUserEmail => firebaseUser?.email ?? "";
-
   String get getDisplayName => firebaseUser?.displayName ?? "";
-
   String get getPhoneNo => firebaseUser?.phoneNumber ?? "";
+
+  /// Robust User ID getter for both Firebase and Custom Backend
+  String get userId {
+    // 1. Try Firebase
+    if (firebaseUser != null && firebaseUser!.uid.isNotEmpty) {
+      return firebaseUser!.uid;
+    }
+
+    // 2. Try Local Storage (Check multiple possible keys in default container)
+    final keys = ['USER_ID', 'user_id', 'uid', 'mongodb_id', 'current_user_id'];
+    for (var key in keys) {
+      final val = deviceStorage.read(key)?.toString();
+      if (val != null && val.isNotEmpty && val != 'null') {
+        return val;
+      }
+    }
+
+    // 3. Try TLocalStorage instance (Check if it's in a specific bucket)
+    try {
+      final val = TLocalStorage.instance().readData<String>('USER_ID');
+      if (val != null && val.isNotEmpty) return val;
+    } catch (_) {}
+
+    return '';
+  }
 
   /// Loads when app Launch from main.dart
   @override
@@ -78,7 +102,8 @@ class AuthenticationRepository extends GetxController {
       }
     } else if (engineerNumber != null && engineerNumber.toString().isNotEmpty) {
       // Persistent Login for Custom Backend (If Firebase user is null)
-      final userId = deviceStorage.read('USER_ID') ?? 'engineer';
+      final rawId = deviceStorage.read('USER_ID')?.toString();
+      final userId = (rawId == null || rawId.isEmpty) ? 'engineer' : rawId;
       await TLocalStorage.init(userId);
 
       // Re-link device to user in OneSignal on app restart

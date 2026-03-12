@@ -100,7 +100,15 @@ class LoginController extends GetxController {
 
       // Specifically save the engineer number and details for future API calls
       localStorage.write('INSPECTION_ENGINEER_NUMBER', userPhone);
-      localStorage.write('USER_ID', response['user']?['_id'] ?? '');
+      
+      // Robustly extract user ID from various possible keys
+      final userObj = response['user'] as Map<String, dynamic>? ?? {};
+      final storedUserId = (userObj['_id'] ?? userObj['id'] ?? userObj['uid'] ?? userObj['userId'])?.toString() ?? '';
+      
+      localStorage.write('USER_ID', storedUserId);
+      localStorage.write('user_id', storedUserId);
+      localStorage.write('uid', storedUserId);
+      localStorage.write('mongodb_id', storedUserId);
       localStorage.write('USER_ROLE', userType);
 
       // Link device to user in OneSignal with MongoDB user ID

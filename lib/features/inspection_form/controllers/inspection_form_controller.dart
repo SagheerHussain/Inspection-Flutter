@@ -16,6 +16,7 @@ import '../helpers/car_model_debug_printer.dart';
 import '../../schedules/models/schedule_model.dart';
 import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
 import '../../schedules/controllers/schedule_controller.dart';
+import '../../../data/repository/authentication_repository/authentication_repository.dart';
 
 class InspectionFormController extends GetxController {
   final String appointmentId;
@@ -704,11 +705,10 @@ class InspectionFormController extends GetxController {
           'rhsRearTyre': 'RHS Rear Tyre',
           'commentsOnEngineOil': 'Comment On Engine Oil',
           'rearWiperWasher': 'Rear Wiper & Washer',
-          'powerWindowConditionRhsFront': 'Driver Door Features',
-          'powerWindowConditionLhsFront': 'Co-Driver Door Features',
+          'powerWindowConditionRhsFront': 'RHS Front Door Features',
+          'powerWindowConditionLhsFront': 'LHS Front Door Features',
           'powerWindowConditionRhsRear': 'RHS Rear Door Features',
           'powerWindowConditionLhsRear': 'LHS Rear Door Features',
-          'rtoForm28': 'RTO Form 28',
           'commentsOnRadiator': 'Comment On Radiator',
           'commentOnInterior': 'Comment On Interior',
           'commentsOnTransmission': 'Comments On Transmission',
@@ -720,7 +720,14 @@ class InspectionFormController extends GetxController {
           'vinPlateDetails': 'Vin Plate Details',
           'additionalDetails': 'Additional Details',
           'fuelLevel': 'Fuel Level',
+          'duplicateKey': 'Duplicate Key',
+          'rtoForm28': 'RTO Form 28 (2 copies)',
+          'rtoNoc': 'RTO NOC',
         };
+
+        debugPrint(
+          '🔍 [Dropdowns] Starting mapping for ${InspectionFieldDefs.sections.length} sections...',
+        );
 
         for (final section in InspectionFieldDefs.sections) {
           for (final field in section.fields) {
@@ -741,8 +748,15 @@ class InspectionFormController extends GetxController {
                 orElse: () => '',
               );
               if (foundKey.isNotEmpty) {
+                debugPrint(
+                  '🎯 [Dropdowns] Manual Override: "$fieldKey" → "$foundKey"',
+                );
                 mappedOptions[fieldKey] = apiDropdowns[foundKey]!;
                 continue; // skip fuzzy matching for this field
+              } else {
+                debugPrint(
+                  '⚠️ [Dropdowns] Override failed for "$fieldKey" ("$apiName" not found in API list)',
+                );
               }
             }
 
@@ -772,16 +786,22 @@ class InspectionFormController extends GetxController {
 
             // High confidence threshold (0.75) for fuzzy matching
             if (bestMatchName != null && bestScore >= 0.75) {
+              debugPrint(
+                '🔗 [Dropdowns] Auto-mapped "$fieldKey" ("$fieldLabel") → "$bestMatchName" (Score: $bestScore)',
+              );
               mappedOptions[fieldKey] = apiDropdowns[bestMatchName]!;
             }
           }
         }
 
         if (mappedOptions.isNotEmpty) {
+          debugPrint(
+            '✅ [Dropdowns] Successfully mapped ${mappedOptions.length} fields.',
+          );
+          for (final entry in mappedOptions.entries) {
+            debugPrint('   📍 ${entry.key} → ${entry.value.length} items');
+          }
           dropdownOptions.addAll(mappedOptions);
-          // debugPrint(
-          // '✨ Dynamic mapping complete. ${mappedOptions.length} fields populated from API.',
-          // );
         }
       }
     } catch (e) {
@@ -1725,8 +1745,8 @@ class InspectionFormController extends GetxController {
           // debugPrint('📋 appointmentId: $appointmentId');
 
           final storage = GetStorage();
-          final userId = storage.read('USER_ID') ?? '';
-          final userRole = storage.read('USER_ROLE') ?? 'Inspection Engineer';
+          final userId = storage.read('USER_ID')?.toString() ?? storage.read('user_id')?.toString() ?? '';
+          final userRole = storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
           final statusBody = {
             'telecallingId': schedule!.id,
@@ -2450,8 +2470,8 @@ class InspectionFormController extends GetxController {
           // debugPrint('🔑 telecallingId: ${schedule!.id}');
 
           final storage = GetStorage();
-          final userId = storage.read('USER_ID') ?? '';
-          final userRole = storage.read('USER_ROLE') ?? 'Inspection Engineer';
+          final userId = storage.read('USER_ID')?.toString() ?? storage.read('user_id')?.toString() ?? '';
+          final userRole = storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
           final statusBody = {
             'telecallingId': schedule!.id,
@@ -2955,12 +2975,15 @@ class InspectionFormController extends GetxController {
       return;
     }
 
+    // ── Simple & Direct UserId Retrieval ──
+    final String userId = AuthenticationRepository.instance.userId;
+
     try {
       isFetchingDetails.value = true;
 
       final response = await ApiService.post(
         ApiConstants.fetchVehicleDetailsUrl,
-        {"vehicleRegistrationNumber": regNo},
+        {"vehicleRegistrationNumber": regNo, "userId": userId},
       );
 
       // Print auto-fetched data to console as requested
@@ -2979,13 +3002,7 @@ class InspectionFormController extends GetxController {
       }
     } catch (e) {
       // debugPrint('❌ AutoFetch Error: $e');
-      TLoaders.errorSnackBar(
-        title: 'Fetch Failed',
-        message:
-            e.toString().contains('No details found')
-                ? 'No data found for this vehicle.'
-                : 'Unable to connect to RTO service.',
-      );
+      TLoaders.customToast(message: e.toString());
     } finally {
       isFetchingDetails.value = false;
     }
