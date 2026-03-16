@@ -14,6 +14,7 @@ class CarDetailsController extends GetxController {
   final isLoading = true.obs;
   final hasError = false.obs;
   final errorMessage = ''.obs;
+  final currentImageIndex = 0.obs;
 
   @override
   void onInit() {

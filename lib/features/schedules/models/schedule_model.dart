@@ -157,4 +157,52 @@ class ScheduleModel {
 
   /// Get full car name
   String get fullCarName => '$make $model';
+
+  ScheduleModel copyWith({
+    String? make,
+    String? model,
+    String? variant,
+    String? inspectionStatus,
+    // Add more fields if needed
+  }) {
+    return ScheduleModel(
+      id: id,
+      carRegistrationNumber: carRegistrationNumber,
+      yearOfRegistration: yearOfRegistration,
+      ownerName: ownerName,
+      ownershipSerialNumber: ownershipSerialNumber,
+      make: make ?? this.make,
+      model: model ?? this.model,
+      variant: variant ?? this.variant,
+      emailAddress: emailAddress,
+      appointmentSource: appointmentSource,
+      vehicleStatus: vehicleStatus,
+      zipCode: zipCode,
+      customerContactNumber: customerContactNumber,
+      city: city,
+      yearOfManufacture: yearOfManufacture,
+      allocatedTo: allocatedTo,
+      inspectionStatus: inspectionStatus ?? this.inspectionStatus,
+      approvalStatus: approvalStatus,
+      priority: priority,
+      ncdUcdName: ncdUcdName,
+      repName: repName,
+      repContact: repContact,
+      bankSource: bankSource,
+      referenceName: referenceName,
+      remarks: remarks,
+      createdBy: createdBy,
+      odometerReadingInKms: odometerReadingInKms,
+      additionalNotes: additionalNotes,
+      carImages: carImages,
+      inspectionDateTime: inspectionDateTime,
+      inspectionAddress: inspectionAddress,
+      inspectionEngineerNumber: inspectionEngineerNumber,
+      addedBy: addedBy,
+      timeStamp: timeStamp,
+      appointmentId: appointmentId,
+      createdAt: createdAt,
+      updatedAt: updatedAt,
+    );
+  }
 }

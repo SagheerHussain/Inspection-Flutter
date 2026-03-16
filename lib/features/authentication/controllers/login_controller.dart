@@ -34,13 +34,13 @@ class LoginController extends GetxController {
 
     userName.text =
         localStorage.read('REMEMBER_ME_USERNAME') ??
-        (isProd ? 'Kazi Sohel Nawaz' : 'inspection');
+        (isProd ? 'sagheer' : 'inspection');
     phoneNumber.text =
         localStorage.read('REMEMBER_ME_PHONE') ??
-        (isProd ? '9830300302' : '9090909090');
+        (isProd ? '9090909090' : '9090909090');
     password.text =
         localStorage.read('REMEMBER_ME_PASSWORD') ??
-        (isProd ? 'Kazi_S_N@1974#' : 'Admin@123');
+        (isProd ? 'Admin@123' : 'Admin@123');
     super.onInit();
   }
 
@@ -100,11 +100,17 @@ class LoginController extends GetxController {
 
       // Specifically save the engineer number and details for future API calls
       localStorage.write('INSPECTION_ENGINEER_NUMBER', userPhone);
-      
+
       // Robustly extract user ID from various possible keys
       final userObj = response['user'] as Map<String, dynamic>? ?? {};
-      final storedUserId = (userObj['_id'] ?? userObj['id'] ?? userObj['uid'] ?? userObj['userId'])?.toString() ?? '';
-      
+      final storedUserId =
+          (userObj['_id'] ??
+                  userObj['id'] ??
+                  userObj['uid'] ??
+                  userObj['userId'])
+              ?.toString() ??
+          '';
+
       localStorage.write('USER_ID', storedUserId);
       localStorage.write('user_id', storedUserId);
       localStorage.write('uid', storedUserId);

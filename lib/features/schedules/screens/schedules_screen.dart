@@ -253,11 +253,10 @@ class _ScheduleCard extends StatelessWidget {
       '-',
       '',
     );
-    final isReInspection =
-        normalizedStatus == 'reinspection' ||
-        normalizedStatus == 'reinspected' ||
-        schedule.appointmentSource.toLowerCase().contains('re-inspected') ||
-        schedule.appointmentSource.toLowerCase().contains('re-inspection');
+    final isFromReInspection =
+        (normalizedStatus != 'reinspection' && normalizedStatus != 'reinspected') &&
+        (schedule.appointmentSource.toLowerCase().contains('re-inspected') ||
+         schedule.appointmentSource.toLowerCase().contains('re-inspection'));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
@@ -328,42 +327,7 @@ class _ScheduleCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
 
-                // City chip
-                if (schedule.city.isNotEmpty)
-                  Flexible(
-                    child: _headerChip(
-                      icon: Icons.location_city_rounded,
-                      label: schedule.city.toUpperCase(),
-                      bgColor:
-                          dark
-                              ? Colors.white.withValues(alpha: 0.10)
-                              : Colors.white,
-                      iconColor: const Color(0xFF0EA5E9),
-                      textStyle: txtTheme.labelSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                        color: dark ? Colors.white70 : const Color(0xFF475569),
-                        fontSize: 10,
-                      ),
-                      flexible: true,
-                    ),
-                  ),
-
-                // Origin Hint Badges
-                if (normalizedStatus == 'scheduled')
-                  _headerChip(
-                    icon: Icons.calendar_today_rounded,
-                    label: 'FROM SCHEDULED',
-                    bgColor: Colors.blue.withValues(alpha: 0.1),
-                    iconColor: Colors.blue,
-                    textStyle: txtTheme.labelSmall?.copyWith(
-                      fontWeight: FontWeight.w900,
-                      color: Colors.blue,
-                      fontSize: 10,
-                    ),
-                  ),
-
-                if (isReInspection)
+                if (isFromReInspection)
                   _headerChip(
                     icon: Icons.replay_rounded,
                     label: 'RE-INSPECTION',
@@ -629,6 +593,51 @@ class _ScheduleCard extends StatelessWidget {
                                     dark
                                         ? Colors.grey.shade400
                                         : const Color(0xFF64748B),
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    // City chip moved next to Registration number
+                    if (schedule.city.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              dark
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color:
+                                dark
+                                    ? Colors.white.withValues(alpha: 0.1)
+                                    : const Color(0xFFE2E8F0),
+                            width: 0.5,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_city_rounded,
+                              size: 11,
+                              color: const Color(0xFF0EA5E9),
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              schedule.city.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color:
+                                    dark
+                                        ? Colors.white70
+                                        : const Color(0xFF475569),
                                 letterSpacing: 0.5,
                               ),
                             ),

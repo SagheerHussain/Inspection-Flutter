@@ -32,6 +32,52 @@ class ScheduleController extends GetxController {
   List<ScheduleModel> _allFilteredRecords = [];
   int _currentIndex = 0;
 
+  /// Update a specific schedule across all controller instances (tags).
+  /// This ensures that changes made in the form (like make/model) are
+  /// immediately reflected in the list cards.
+  static void updateScheduleGlobally(
+    String appointmentId, {
+    String? make,
+    String? model,
+    String? variant,
+  }) {
+    // List of common tags that might exist in the app
+    final tags = [
+      'schedule_Running',
+      'schedule_Scheduled',
+      'schedule_Re-Inspection',
+      'schedule_Re-Scheduled',
+      'search_results',
+    ];
+
+    for (final tag in tags) {
+      if (Get.isRegistered<ScheduleController>(tag: tag)) {
+        final controller = Get.find<ScheduleController>(tag: tag);
+        final index = controller.schedules.indexWhere(
+          (s) => s.appointmentId == appointmentId,
+        );
+
+        if (index != -1) {
+          final updated = controller.schedules[index].copyWith(
+            make: make,
+            model: model,
+            variant: variant,
+          );
+          controller.schedules[index] = updated;
+          controller.schedules.refresh();
+
+          // Also update the hidden full records list so pagination doesn't revert it
+          final fullIndex = controller._allFilteredRecords.indexWhere(
+            (s) => s.appointmentId == appointmentId,
+          );
+          if (fullIndex != -1) {
+            controller._allFilteredRecords[fullIndex] = updated;
+          }
+        }
+      }
+    }
+  }
+
   @override
   void onInit() {
     fetchSchedules();
@@ -167,13 +213,7 @@ class ScheduleController extends GetxController {
         // STATUS MODE: Fetch single status (with fallback for Re- variants)
         final List<String> statusVariants = [statusFilter];
         if (statusFilter == InspectionStatuses.running) {
-          // If viewing running inspections, also include scheduled and reinspection variants as requested
-          statusVariants.add(InspectionStatuses.scheduled);
-          statusVariants.add(InspectionStatuses.reInspection);
-          statusVariants.add('Reinspection');
-          statusVariants.add('Re-Inspected');
-          statusVariants.add('Reinspected');
-          statusVariants.add('Rescheduled');
+          // Fetch strictly running status. Move logic handles displaying items appropriately.
         } else if (statusFilter == InspectionStatuses.reInspection) {
           statusVariants.add('Reinspection');
           statusVariants.add('Re-Inspected');
@@ -221,11 +261,6 @@ class ScheduleController extends GetxController {
                 normalizedRecordStatus = 'reinspection';
               if (normalizedFilterStatus == 'reinspected')
                 normalizedFilterStatus = 'reinspection';
-
-              // If filter is Running, we allow several segments
-              if (statusFilter == InspectionStatuses.running) {
-                return true; // We already fetched only the variants we want
-              }
 
               return normalizedRecordStatus == normalizedFilterStatus;
             }).toList();

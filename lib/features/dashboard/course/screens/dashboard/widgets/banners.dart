@@ -18,7 +18,7 @@ class DashboardBanners extends StatelessWidget {
     final stats = DashboardStatsController.instance;
 
     return SizedBox(
-      height: 200,
+      height: 160,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

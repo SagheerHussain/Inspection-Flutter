@@ -157,7 +157,7 @@ class InspectionFormScreen extends StatelessWidget {
         backgroundColor: const Color(0xFFF5F7FA),
         body: Column(
           children: [
-            _AppBar(schedule: schedule),
+            _AppBar(schedule: schedule, controller: controller),
             _ProgressBar(controller: controller),
             Expanded(
               child: Obx(() {
@@ -221,7 +221,8 @@ class InspectionFormScreen extends StatelessWidget {
 // ═══════════════════════════════════════════════
 class _AppBar extends StatelessWidget {
   final ScheduleModel schedule;
-  const _AppBar({required this.schedule});
+  final InspectionFormController controller;
+  const _AppBar({required this.schedule, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -264,16 +265,27 @@ class _AppBar extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  schedule.fullCarName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 17,
-                    letterSpacing: 0.3,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                Obx(() {
+                  final data = controller.inspectionData.value?.data;
+                  String displayName = schedule.fullCarName;
+                  if (data != null) {
+                    final make = data['make']?.toString() ?? '';
+                    final model = data['model']?.toString() ?? '';
+                    if (make.isNotEmpty || model.isNotEmpty) {
+                      displayName = '$make $model'.trim();
+                    }
+                  }
+                  return Text(
+                    displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 17,
+                      letterSpacing: 0.3,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  );
+                }),
                 const SizedBox(height: 2),
                 Text(
                   schedule.appointmentId,
@@ -491,6 +503,8 @@ class _SectionPageState extends State<_SectionPage> {
               'rcCondition': 'rcBookAvailability',
               'rtoForm28': 'rtoNoc',
               'duplicateKeyImages': 'duplicateKey',
+              'taxValidTill': 'roadTaxValidity',
+              'hypothecatedTo': 'hypothecationDetails',
               // Interior / Airbags
               'airbagImages': 'airbagFeaturesDriverSide',
               'coDriverAirbagImages': 'airbagFeaturesCoDriverSide',
@@ -528,12 +542,22 @@ class _SectionPageState extends State<_SectionPage> {
                     return const SizedBox.shrink();
                   }
                 } else if (field.key == 'duplicateKeyImages') {
-                  if (parentVal != 'Duplicate Key Available') {
+                  if (parentVal != 'Duplicate Key Available' &&
+                      parentVal != 'Available') {
+                    return const SizedBox.shrink();
+                  }
+                } else if (field.key == 'taxValidTill') {
+                  if (parentVal != 'Limited Period') {
+                    return const SizedBox.shrink();
+                  }
+                } else if (field.key == 'hypothecatedTo') {
+                  if (parentVal == 'Not Hypothecated' || parentVal == 'No') {
                     return const SizedBox.shrink();
                   }
                 } else {
                   if (parentVal == 'Not Applicable' ||
                       parentVal == 'Not Available' ||
+                      parentVal == 'Not Present' ||
                       parentVal == 'Policy Not Available') {
                     return const SizedBox.shrink();
                   }
@@ -1301,7 +1325,7 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
                       ],
                     ),
                     IconButton(
-                      onPressed: () => Get.back(),
+                      onPressed: () => Navigator.pop(context),
                       icon: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
@@ -1351,7 +1375,7 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
                 child: SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () => Get.back(),
+                    onPressed: () => Navigator.pop(context),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _accent,
                       foregroundColor: Colors.white,

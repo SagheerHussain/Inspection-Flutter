@@ -1,12 +1,18 @@
+import 'package:carousel_slider/carousel_slider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:smooth_page_indicator/smooth_page_indicator.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/constants/colors.dart';
 import '../../../utils/helpers/helper_functions.dart';
 import '../controllers/car_details_controller.dart';
 import '../models/car_details_model.dart';
+
+// Royal blue to match the inspection form
+const Color _accentColor = Color(0xFF0D6EFD);
+const Color _lightAccent = Color(0xFFE7F0FF);
 
 class CarDetailsScreen extends StatelessWidget {
   final String appointmentId;
@@ -109,11 +115,16 @@ class _CarDetailsBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final controller = Get.find<CarDetailsController>(tag: 'car_${car.appointmentId}');
+
     return CustomScrollView(
       physics: const BouncingScrollPhysics(),
       slivers: [
         // ── Hero Image AppBar ──
-        _buildHeroAppBar(context),
+        _buildHeroAppBar(context, controller),
+
+        // ── Car Name & Appointment ID Clean Header ──
+        _buildVehicleNameHeader(controller),
 
         // ── Content ──
         SliverToBoxAdapter(
@@ -121,7 +132,7 @@ class _CarDetailsBody extends StatelessWidget {
             children: [
               // Quick Stats Row
               _buildQuickStats(),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
               // Tabs Section
               _CarDetailsTabs(car: car, dark: dark, txtTheme: txtTheme),
@@ -134,157 +145,191 @@ class _CarDetailsBody extends StatelessWidget {
     );
   }
 
-  Widget _buildHeroAppBar(BuildContext context) {
-    final heroImage =
-        car.frontMain.isNotEmpty
-            ? car.frontMain.first
-            : (car.allExteriorImages.isNotEmpty
-                ? car.allExteriorImages.first
-                : '');
+  Widget _buildHeroAppBar(BuildContext context, CarDetailsController controller) {
+    final images = car.allImages.isNotEmpty ? car.allImages : [car.frontMain.isNotEmpty ? car.frontMain.first : ''];
 
     return SliverAppBar(
-      expandedHeight: 320,
+      expandedHeight: 280,
       pinned: true,
       stretch: true,
-      backgroundColor: dark ? const Color(0xFF0A0E21) : TColors.primary,
-      flexibleSpace: FlexibleSpaceBar(
-        stretchModes: const [StretchMode.zoomBackground, StretchMode.fadeTitle],
-        title: Text(
-          car.fullCarName,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w800,
-            shadows: [Shadow(blurRadius: 8, color: Colors.black54)],
+      leading: IconButton(
+        onPressed: () => Navigator.pop(context),
+        icon: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.3),
+            shape: BoxShape.circle,
           ),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+          child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
         ),
+      ),
+      backgroundColor: dark ? const Color(0xFF0A0E21) : Colors.white,
+      flexibleSpace: FlexibleSpaceBar(
+        stretchModes: const [StretchMode.zoomBackground],
         background: Stack(
           fit: StackFit.expand,
           children: [
-            if (heroImage.isNotEmpty)
-              Image.network(
-                heroImage,
-                fit: BoxFit.cover,
-                errorBuilder:
-                    (_, __, ___) => Container(
-                      color: dark ? const Color(0xFF1A1F36) : TColors.primary,
-                      child: const Icon(
-                        Icons.directions_car,
-                        size: 80,
-                        color: Colors.white54,
-                      ),
-                    ),
+            // ── Swipable Hero Images ──
+            if (images.isNotEmpty && images.first.isNotEmpty)
+              CarouselSlider.builder(
+                itemCount: images.length,
+                options: CarouselOptions(
+                  height: 350,
+                  viewportFraction: 1.0,
+                  enlargeCenterPage: false,
+                  autoPlay: false,
+                  onPageChanged: (index, reason) {
+                    controller.currentImageIndex.value = index;
+                  },
+                ),
+                itemBuilder: (ctx, index, realIdx) {
+                  return Image.network(
+                    images[index],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    errorBuilder: (_, __, ___) => _buildPlaceholder(),
+                  );
+                },
               )
             else
-              Container(
+              _buildPlaceholder(),
+
+            // Top Gradient for back button visibility
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              height: 100,
+              child: DecoratedBox(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      TColors.primary,
-                      TColors.primary.withValues(alpha: 0.7),
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.black.withValues(alpha: 0.4), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+
+            // Image Page Indicator
+            if (images.length > 1)
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Obx(() => AnimatedSmoothIndicator(
+                        activeIndex: controller.currentImageIndex.value,
+                        count: images.length,
+                        effect: ExpandingDotsEffect(
+                          dotHeight: 6,
+                          dotWidth: 6,
+                          activeDotColor: Colors.white,
+                          dotColor: Colors.white.withValues(alpha: 0.5),
+                          expansionFactor: 4,
+                          spacing: 4,
+                        ),
+                      )),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder() {
+    return Container(
+      color: dark ? const Color(0xFF1A1F36) : TColors.grey.withValues(alpha: 0.2),
+      child: const Icon(
+        Icons.directions_car,
+        size: 80,
+        color: Colors.grey,
+      ),
+    );
+  }
+
+  Widget _buildVehicleNameHeader(CarDetailsController controller) {
+    return SliverToBoxAdapter(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 8),
+        color: dark ? const Color(0xFF0A0E21) : const Color(0xFFF5F6FA),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Car Name with no shadow
+            Text(
+              car.fullCarName,
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: dark ? Colors.white : Colors.black87,
+                height: 1.2,
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Appointment ID Badge
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: dark ? Colors.white.withValues(alpha: 0.1) : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: dark ? Colors.white24 : Colors.grey.shade300,
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.tag,
+                        size: 14,
+                        color: dark ? Colors.white70 : Colors.grey.shade700,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        car.appointmentId,
+                        style: TextStyle(
+                          color: dark ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
                     ],
                   ),
                 ),
-                child: const Icon(
-                  Icons.directions_car,
-                  size: 80,
-                  color: Colors.white54,
-                ),
-              ),
-
-            // Gradient overlay for text readability
-            const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Colors.transparent, Colors.black54],
-                  stops: [0.5, 1.0],
-                ),
-              ),
-            ),
-
-            // Appointment ID badge
-            Positioned(
-              bottom: 56,
-              left: 16,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white30),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.tag, size: 14, color: Colors.white),
-                    const SizedBox(width: 4),
-                    Text(
-                      car.appointmentId,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 13,
+                const Spacer(),
+                // Gallery button moved here for cleaner UI
+                if (car.allImages.isNotEmpty)
+                  GestureDetector(
+                    onTap: () => _openGallery(Get.context!, car.allImages, 'All Photos'),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _lightAccent,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.photo_library_rounded, size: 14, color: _accentColor),
+                          SizedBox(width: 6),
+                          Text(
+                            'View All',
+                            style: TextStyle(
+                              color: _accentColor,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-              ),
-            ),
-
-            // Status badge
-            Positioned(
-              bottom: 56,
-              right: 16,
-              child: _StatusBadge(status: car.status),
-            ),
-
-            // Image count
-            if (car.allImages.isNotEmpty)
-              Positioned(
-                top: 90,
-                right: 16,
-                child: GestureDetector(
-                  onTap:
-                      () => _openGallery(context, car.allImages, 'All Photos'),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black45,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.photo_library_rounded,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${car.allImages.length} Photos',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
                   ),
-                ),
-              ),
+              ],
+            ),
           ],
         ),
       ),
@@ -408,7 +453,7 @@ class _CarDetailsTabsState extends State<_CarDetailsTabs>
             ),
             indicator: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
-              color: TColors.primary,
+              color: _accentColor,
             ),
             indicatorSize: TabBarIndicatorSize.tab,
             dividerHeight: 0,
@@ -1117,10 +1162,7 @@ class _AuctionTab extends StatelessWidget {
                   child: _MiniStatCard(
                     dark: dark,
                     label: 'Auction Status',
-                    value:
-                        car.auctionStatus
-                            .replaceAll(RegExp(r'(?=[A-Z])'), ' ')
-                            .trim(),
+                    value: car.auctionStatus.replaceAll(RegExp(r'(?=[A-Z])'), ' ').trim(),
                     icon: Icons.auto_awesome_rounded,
                     color: const Color(0xFFFF9800),
                   ),
@@ -1137,24 +1179,8 @@ class _AuctionTab extends StatelessWidget {
             iconColor: const Color(0xFF4CAF50),
             children: [
               _DetailRow('Status', car.approvalStatus),
-              if (car.approvedBy.isNotEmpty)
-                _DetailRow('Approved By', car.approvedBy),
-              if (car.approvalDate.isNotEmpty)
-                _DetailRow('Date', _formatDate(car.approvalDate)),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          _SectionCard(
-            dark: dark,
-            title: 'Margins',
-            icon: Icons.trending_up_rounded,
-            iconColor: const Color(0xFF7C4DFF),
-            children: [
-              _DetailRow('Fixed Margin', '${car.fixedMargin}%'),
-              _DetailRow('Variable Margin', '${car.variableMargin}%'),
-              _DetailRow('Budget Car', car.budgetCar),
-              _DetailRow('KM Range Level', '${car.kmRangeLevel}'),
+              if (car.approvedBy.isNotEmpty) _DetailRow('Approved By', car.approvedBy),
+              if (car.approvalDate.isNotEmpty) _DetailRow('Date', _formatDate(car.approvalDate)),
             ],
           ),
         ],
@@ -1210,55 +1236,6 @@ class _QuickStatChip extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  final String status;
-  const _StatusBadge({required this.status});
-
-  Color _color() {
-    switch (status.toLowerCase()) {
-      case 'inspected':
-      case 'approved':
-        return const Color(0xFF4CAF50);
-      case 'running':
-        return const Color(0xFFFF9800);
-      case 'scheduled':
-        return const Color(0xFF2196F3);
-      default:
-        return const Color(0xFF9E9E9E);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: _color().withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _color().withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: _color(), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 5),
-          Text(
-            status,
-            style: TextStyle(
-              color: _color(),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _SectionCard extends StatelessWidget {
   final bool dark;

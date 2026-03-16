@@ -1,6 +1,6 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../../../../utils/constants/colors.dart';
-import '../../../../../../utils/constants/image_strings.dart';
 import '../../../../../../utils/helpers/helper_functions.dart';
 import '../../../../../../utils/constants/sizes.dart';
 
@@ -11,83 +11,90 @@ class DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
 
-    return AppBar(
-      elevation: 0,
-      centerTitle: false,
-      backgroundColor: Colors.transparent,
-      automaticallyImplyLeading: false,
-      leading: const SizedBox.shrink(),
-      leadingWidth: 0,
-      title: Text(
-        "OTOBIX",
-        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w900,
-          letterSpacing: 1.5,
-          fontSize:
-              (Theme.of(context).textTheme.headlineMedium?.fontSize ?? 24) *
-              1.20,
-        ),
-      ),
-      actions: [
-        // Notification Bell with Counter Badge
-        Container(
-          margin: const EdgeInsets.only(right: 12, top: 7),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(10),
-            color: dark ? TColors.secondary : TColors.cardBackgroundColor,
-          ),
-          child: Stack(
-            children: [
-              IconButton(
-                onPressed: () => _showNotificationsSheet(context),
-                icon: Icon(
-                  Icons.notifications_outlined,
-                  color: dark ? Colors.white : TColors.dark,
-                  size: 24,
-                ),
-              ),
-              Positioned(
-                right: 6,
-                top: 6,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: TColors.error,
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 18,
-                    minHeight: 18,
-                  ),
-                  child: const Text(
-                    '0',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-
-        // Otobix Logo next to bell
-        Padding(
-          padding: const EdgeInsets.only(right: 16, top: 7),
-          child: GestureDetector(
-            onTap: () => Scaffold.of(context).openDrawer(),
-            child: Image(
-              image: const AssetImage(TImages.tLogoImage),
-              height: 35,
-              width: 35,
-              fit: BoxFit.contain,
+    return ClipRRect(
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 2, sigmaY: 2),
+        child: AppBar(
+          elevation: 0,
+          centerTitle: false,
+          backgroundColor:
+              dark
+                  ? Colors.black.withOpacity(0.4)
+                  : Colors.white.withOpacity(0.6),
+          automaticallyImplyLeading: false,
+          leading: const SizedBox.shrink(),
+          leadingWidth: 0,
+          shape: Border(
+            bottom: BorderSide(
+              color:
+                  dark
+                      ? Colors.white.withOpacity(0.1)
+                      : Colors.black.withOpacity(0.05),
+              width: 1,
             ),
           ),
+          title: Text(
+            "OTOBIX",
+            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.5,
+              fontSize:
+                  (Theme.of(context).textTheme.headlineMedium?.fontSize ?? 24) *
+                  1.20,
+            ),
+          ),
+          actions: [
+            // Notification Bell with Counter Badge
+            IconButton(
+              onPressed: () => _showNotificationsSheet(context),
+              icon: Stack(
+                children: [
+                  Icon(
+                    Icons.notifications_outlined,
+                    color: dark ? Colors.white : TColors.dark,
+                    size: 26,
+                  ),
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: TColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 14,
+                        minHeight: 14,
+                      ),
+                      child: const Text(
+                        '0',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Hamburger Menu Icon
+            IconButton(
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              icon: Icon(
+                Icons.menu_rounded,
+                color: dark ? Colors.white : TColors.dark,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 8),
+          ],
         ),
-      ],
+      ),
     );
   }
 

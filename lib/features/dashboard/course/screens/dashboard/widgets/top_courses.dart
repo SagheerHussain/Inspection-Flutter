@@ -71,186 +71,160 @@ class DashboardTopCourses extends StatelessWidget {
       ),
     ];
 
-    return SizedBox(
-      height: 170,
-      child: ListView.builder(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.builder(
+        padding: EdgeInsets.zero,
         shrinkWrap: true,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
         itemCount: quickLinks.length,
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+          mainAxisExtent: 140, // Height reduced
+        ),
         itemBuilder: (context, index) {
           final item = quickLinks[index];
-          return Padding(
-            padding: const EdgeInsets.only(right: 12, top: 8, bottom: 4),
-            child: GestureDetector(
-              onTap: () {
-                if (Get.isRegistered<DashboardSearchController>()) {
-                  Get.find<DashboardSearchController>().clearSearch();
-                }
-                Get.to(() => SchedulesScreen(statusFilter: item.statusFilter));
-              },
-              child: Container(
-                width: 165,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: item.gradientColors,
-                  ),
-                  boxShadow: [],
+          return GestureDetector(
+            onTap: () {
+              if (Get.isRegistered<DashboardSearchController>()) {
+                Get.find<DashboardSearchController>().clearSearch();
+              }
+              Get.to(() => SchedulesScreen(statusFilter: item.statusFilter));
+            },
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(20),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: item.gradientColors,
                 ),
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (item.hasTimerObs != null)
-                          Obx(() {
-                            if (!item.hasTimerObs!.value) {
-                              return const SizedBox.shrink();
-                            }
-                            return Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                if (item.dayLabelObs != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 2,
-                                    ),
-                                    margin: const EdgeInsets.only(bottom: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.3,
-                                      ),
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      item.dayLabelObs!.value.toUpperCase(),
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 7,
-                                        fontWeight: FontWeight.w900,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: item.iconColor.withValues(alpha: 0.1),
+                    blurRadius: 8,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              padding: const EdgeInsets.all(12), // Reduced padding
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (item.hasTimerObs != null)
+                        Obx(() {
+                          if (!item.hasTimerObs!.value) {
+                            return const SizedBox.shrink();
+                          }
+                          return Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (item.dayLabelObs != null)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 6,
+                                    vertical: 2,
                                   ),
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    left: 2,
-                                    bottom: 4,
+                                  margin: const EdgeInsets.only(bottom: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withValues(alpha: 0.2),
+                                    borderRadius: BorderRadius.circular(6),
                                   ),
                                   child: Text(
-                                    item.timerTextObs?.value == 'OVERDUE'
-                                        ? "Inspection"
-                                        : "Next Inspection in",
+                                    item.dayLabelObs!.value.toUpperCase(),
                                     style: const TextStyle(
-                                      color: Colors.black87,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.2,
+                                      color: Colors.white,
+                                      fontSize: 6, // Smaller font
+                                      fontWeight: FontWeight.w900,
+                                      letterSpacing: 0.5,
                                     ),
                                   ),
                                 ),
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 6,
-                                      vertical: 4,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color:
-                                          (item.isExpiredObs?.value ?? false)
-                                              ? Colors.red.withOpacity(0.9)
-                                              : Colors.black.withOpacity(0.4),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        if (item.isExpiredObs?.value ?? false)
-                                          const _PulseDot()
-                                        else
-                                          const Icon(
-                                            Icons.access_time_rounded,
-                                            size: 10,
-                                            color: Colors.white,
-                                          ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          item.timerTextObs?.value ?? '',
-                                          style: const TextStyle(
-                                            color: Colors.white,
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                            fontFeatures: [
-                                              FontFeature.tabularFigures(),
-                                            ],
-                                          ),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 5, // Reduced
+                                    vertical: 3, // Reduced
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color:
+                                        (item.isExpiredObs?.value ?? false)
+                                            ? Colors.red.withValues(alpha: 0.8)
+                                            : Colors.black.withValues(alpha: 0.3),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      if (item.isExpiredObs?.value ?? false)
+                                        const _PulseDot()
+                                      else
+                                        const Icon(
+                                          Icons.access_time_rounded,
+                                          size: 8, // Smaller icon
+                                          color: Colors.white,
                                         ),
-                                      ],
-                                    ),
+                                      const SizedBox(width: 3),
+                                      Text(
+                                        item.timerTextObs?.value ?? '',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8, // Smaller font
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                              ],
-                            );
-                          }),
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: item.iconColor.withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            item.icon,
-                            color: item.iconColor,
-                            size: 22,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-
-                    // Center: Animated Counter
-                    Center(
-                      child: Obx(
-                        () => _AnimatedCounter(
-                          value: item.countObs.value,
-                          style:
-                              txtTheme.displayLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                color: item.iconColor,
-                                fontSize: 48,
-                                height: 1.0,
-                              ) ??
-                              TextStyle(
-                                fontSize: 48,
-                                fontWeight: FontWeight.w900,
-                                color: item.iconColor,
                               ),
+                            ],
+                          );
+                        }),
+                      Container(
+                        padding: const EdgeInsets.all(6), // Reduced
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Icon(
+                          item.icon,
+                          color: item.iconColor,
+                          size: 20, // Smaller icon
                         ),
                       ),
-                    ),
-                    const Spacer(),
-
-                    // Bottom: Title
-                    Text(
-                      item.title,
-                      style: txtTheme.titleLarge?.copyWith(
+                    ],
+                  ),
+                  const Spacer(),
+                  Obx(
+                    () => _AnimatedCounter(
+                      value: item.countObs.value,
+                      style: txtTheme.displaySmall?.copyWith(
                         fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                        color: item.iconColor,
+                        fontSize: 30, // Reduced
+                        height: 1.0,
+                      ) ?? const TextStyle(fontSize: 30, fontWeight: FontWeight.w900),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.title,
+                    style: txtTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14, // Reduced
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
             ),
           );

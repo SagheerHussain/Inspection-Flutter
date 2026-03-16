@@ -69,6 +69,15 @@ class InspectionFormController extends GetxController {
   final _storage = GetStorage();
   final _picker = ImagePicker();
 
+  // ── User-edited field tracking ──
+  // Tracks which field keys the user has explicitly changed during this session.
+  final Set<String> _userEditedKeys = {};
+
+  /// Local snapshot storage key — full form data cached after first API call.
+  /// Once this exists, the API is NEVER called again for this appointment.
+  String get _snapshotKey => 'snapshot_$appointmentId';
+  String get _snapshotImagesKey => 'snapshot_images_$appointmentId';
+
   // Image storage: key → list of local file paths
   final RxMap<String, List<String>> imageFiles = <String, List<String>>{}.obs;
 
@@ -124,35 +133,53 @@ class InspectionFormController extends GetxController {
     try {
       // ── RE-INSPECTION FLOW ──
       if (isReInspection) {
-        // debugPrint(
-        // '🔄 Re-Inspection flow detected. Fetching from car/details with empty appointmentId...',
-        // );
+        // Check snapshot first — API called only once
+        final snapshot = _storage.read(_snapshotKey);
+        if (snapshot != null && snapshot is Map) {
+          _isReInspectionOrigin = true;
+          _reInspectionCarId = snapshot['_id']?.toString();
+          inspectionData.value = InspectionFormModel.fromJson(
+            Map<String, dynamic>.from(snapshot),
+          );
+          final savedImages = _storage.read(_snapshotImagesKey);
+          if (savedImages != null && savedImages is Map) {
+            for (final entry in savedImages.entries) {
+              final list = entry.value;
+              if (list is List) {
+                imageFiles[entry.key.toString()] =
+                    list.map((e) => e.toString()).toList();
+              }
+            }
+          }
+          Get.snackbar(
+            'Draft Loaded',
+            'Continuing from your saved progress.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.blue.shade700,
+            colorText: Colors.white,
+            margin: const EdgeInsets.all(12),
+            borderRadius: 12,
+            duration: const Duration(seconds: 2),
+          );
+          _syncScheduleWithChanges();
+          isLoading.value = false;
+          return;
+        }
 
-        // Fetch data strictly from car/details/{carId}?appointmentId=""
+        // First open — hit the API and cache
         final response = await ApiService.get(
           ApiConstants.carDetailsUrl(appointmentId),
         );
 
         final carData = response['carDetails'];
         if (carData != null) {
-          // Mark this as a Re-Inspection origin
           _isReInspectionOrigin = true;
-
-          // Store the carId for later update call
           _reInspectionCarId = carData['_id']?.toString();
-          // debugPrint('🔑 Re-Inspection carId: $_reInspectionCarId');
-
-          // Store original data snapshot for preview dialog
           _originalData = Map<String, dynamic>.from(carData);
-
-          // Reverse-map API keys → form keys
           _normalizeCarDataToFormKeys(carData);
-
-          // Pre-fill the form with fetched data
           inspectionData.value = InspectionFormModel.fromJson(carData);
-
-          // Pre-fill media from the API response
           _preFillMedia(carData);
+          await _saveSnapshot(); // cache so next open skips API
 
           Get.snackbar(
             'Re-Inspection Data Loaded',
@@ -165,9 +192,6 @@ class InspectionFormController extends GetxController {
             duration: const Duration(seconds: 3),
           );
         } else {
-          // debugPrint(
-          // '⚠️ No car details found for Re-Inspection. Initializing empty form.',
-          // );
           _initializeNewInspection();
         }
 
@@ -176,34 +200,61 @@ class InspectionFormController extends GetxController {
       }
 
       // ── RUNNING LEADS: Check for Re-Inspection Origin FIRST ──
-      // Must check API BEFORE draft to detect if this Running lead was Re-Inspected
+      // Uses snapshot if available (API called only once).
       final normalizedStatus =
           schedule?.inspectionStatus.toLowerCase().replaceAll('-', '') ?? '';
 
       if (normalizedStatus == 'running') {
-        // debugPrint(
-        // '🏃 Running lead detected. Checking for Re-Inspection origin...',
-        // );
+        // Check snapshot first
+        final snapshot = _storage.read(_snapshotKey);
+        if (snapshot != null && snapshot is Map) {
+          final cachedId = snapshot['_id']?.toString();
+          if (cachedId != null && cachedId.isNotEmpty) {
+            _isReInspectionOrigin = true;
+            _reInspectionCarId = cachedId;
+            inspectionData.value = InspectionFormModel.fromJson(
+              Map<String, dynamic>.from(snapshot),
+            );
+            final savedImages = _storage.read(_snapshotImagesKey);
+            if (savedImages != null && savedImages is Map) {
+              for (final entry in savedImages.entries) {
+                final list = entry.value;
+                if (list is List) {
+                  imageFiles[entry.key.toString()] =
+                      list.map((e) => e.toString()).toList();
+                }
+              }
+            }
+            Get.snackbar(
+              'Draft Loaded',
+              'Continuing from your saved progress.',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.blue.shade700,
+              colorText: Colors.white,
+              margin: const EdgeInsets.all(12),
+              borderRadius: 12,
+              duration: const Duration(seconds: 2),
+            );
+            _syncScheduleWithChanges();
+            isLoading.value = false;
+            return;
+          }
+        }
+
+        // First open — call API to detect Re-Inspection origin
         try {
           final response = await ApiService.get(
             ApiConstants.carDetailsUrl(appointmentId),
           );
           final carData = response['carDetails'];
           if (carData != null && carData['_id'] != null) {
-            // debugPrint('🔄 Detected Re-Inspection origin for Running lead');
             _isReInspectionOrigin = true;
             _reInspectionCarId = carData['_id']?.toString();
             _originalData = Map<String, dynamic>.from(carData);
-            // debugPrint(
-            // '🔑 Re-Inspection carId (from Running): $_reInspectionCarId',
-            // );
-
-            // Reverse-map API keys → form keys
             _normalizeCarDataToFormKeys(carData);
-
-            // Pre-fill the form with the existing data
             inspectionData.value = InspectionFormModel.fromJson(carData);
             _preFillMedia(carData);
+            await _saveSnapshot(); // cache for all future opens
 
             Get.snackbar(
               'Re-Inspection Data Loaded',
@@ -216,19 +267,58 @@ class InspectionFormController extends GetxController {
               duration: const Duration(seconds: 3),
             );
 
+            _syncScheduleWithChanges();
             isLoading.value = false;
             return;
           }
         } catch (e) {
-          // debugPrint('⚠️ Re-Inspection check failed for Running lead: $e');
           // Fall through to standard flow
         }
       }
 
-      // ── STANDARD FLOW (Scheduled / Running without Re-Inspection / etc.) ──
-      // PRIORITY: Cars collection API > Local Draft > New empty form
+      // ── STANDARD FLOW (Scheduled / Running without Re-Inspection) ──
+      // Strategy: Call the API exactly ONCE per appointment.
+      //   • First open  → hit API, normalise, cache as local snapshot, display.
+      //   • Later opens → skip API, load directly from local snapshot.
+      // On "Save" the snapshot is fully overwritten with current form state,
+      // so all user edits survive across sessions without touching the API.
 
-      // 1. Try fetching from cars API FIRST (always use server data if it exists)
+      final snapshot = _storage.read(_snapshotKey);
+
+      if (snapshot != null && snapshot is Map) {
+        // ── SUBSEQUENT OPEN: load from snapshot (no API call) ──
+        inspectionData.value = InspectionFormModel.fromJson(
+          Map<String, dynamic>.from(snapshot),
+        );
+
+        // Restore image paths saved in the snapshot
+        final savedImages = _storage.read(_snapshotImagesKey);
+        if (savedImages != null && savedImages is Map) {
+          for (final entry in savedImages.entries) {
+            final list = entry.value;
+            if (list is List) {
+              imageFiles[entry.key.toString()] =
+                  list.map((e) => e.toString()).toList();
+            }
+          }
+        }
+
+        Get.snackbar(
+          'Draft Loaded',
+          'Continuing from your saved progress.',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.blue.shade700,
+          colorText: Colors.white,
+          margin: const EdgeInsets.all(12),
+          borderRadius: 12,
+          duration: const Duration(seconds: 2),
+        );
+        _syncScheduleWithChanges();
+        isLoading.value = false;
+        return;
+      }
+
+      // ── FIRST OPEN: call the API, then cache the result ──
       try {
         final response = await ApiService.get(
           ApiConstants.carDetailsUrl(appointmentId),
@@ -236,15 +326,16 @@ class InspectionFormController extends GetxController {
 
         final carData = response['carDetails'];
         if (carData != null && carData['_id'] != null) {
-          // debugPrint('✅ Car record found in DB for $appointmentId — using server data');
-
-          // Reverse-map API keys → form keys so all fields populate correctly
+          // Reverse-map API keys → form keys
           _normalizeCarDataToFormKeys(carData);
 
           inspectionData.value = InspectionFormModel.fromJson(carData);
 
           // Pre-fill media from the API response
           _preFillMedia(carData);
+
+          // ── Cache the normalised data so subsequent opens skip the API ──
+          await _saveSnapshot();
 
           Get.snackbar(
             'Data Loaded',
@@ -256,47 +347,15 @@ class InspectionFormController extends GetxController {
             borderRadius: 12,
             duration: const Duration(seconds: 2),
           );
+          _syncScheduleWithChanges();
           isLoading.value = false;
           return;
         }
       } catch (e) {
-        // debugPrint('⚠️ Car details fetch failed: $e — falling back to draft/new');
+        // debugPrint('⚠️ Car details fetch failed: $e — falling back to new form');
       }
 
-      // 2. No car record found — try local draft
-      final draftKey = 'draft_$appointmentId';
-      final localDraft = _storage.read(draftKey);
-      if (localDraft != null && localDraft is Map) {
-        inspectionData.value = InspectionFormModel.fromJson(
-          Map<String, dynamic>.from(localDraft),
-        );
-        // Restore image paths from draft
-        final imgKey = 'draft_images_$appointmentId';
-        final savedImages = _storage.read(imgKey);
-        if (savedImages != null && savedImages is Map) {
-          for (final entry in savedImages.entries) {
-            final list = entry.value;
-            if (list is List) {
-              imageFiles[entry.key.toString()] =
-                  list.map((e) => e.toString()).toList();
-            }
-          }
-        }
-        Get.snackbar(
-          'Draft Loaded',
-          'Continuing from your saved progress.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.blue.shade700,
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 12,
-          duration: const Duration(seconds: 2),
-        );
-        isLoading.value = false;
-        return;
-      }
-
-      // 3. No car record and no draft — initialize empty form
+      // No car record found — initialize empty form
       _initializeNewInspection();
     } catch (e) {
       // debugPrint('Fetch failed, initializing new: $e');
@@ -833,6 +892,38 @@ class InspectionFormController extends GetxController {
     );
   }
 
+  /// Persists the entire current form state (fields + images) to local storage.
+  /// Call after first API load AND after every user save.
+  Future<void> _saveSnapshot() async {
+    final data = inspectionData.value;
+    if (data == null) return;
+
+    final snapMap = <String, dynamic>{};
+    data.data.forEach((key, value) {
+      if (value is String || value is num || value is bool || value == null) {
+        snapMap[key] = value;
+      } else if (value is List) {
+        snapMap[key] = value.map((e) => e.toString()).toList();
+      } else {
+        snapMap[key] = value.toString();
+      }
+    });
+
+    // Always write identity fields from data.data (source of truth set by updateField)
+    snapMap['_id'] = data.data['_id'] ?? data.id;
+    snapMap['appointmentId'] = data.data['appointmentId'] ?? data.appointmentId;
+    snapMap['make'] = data.data['make'] ?? data.make;
+    snapMap['model'] = data.data['model'] ?? data.model;
+    snapMap['variant'] = data.data['variant'] ?? data.variant;
+    snapMap['status'] = data.data['status'] ?? data.status;
+    await _storage.write(_snapshotKey, snapMap);
+
+    // Persist image paths in snapshot
+    final imgMap = <String, dynamic>{};
+    imageFiles.forEach((k, v) => imgMap[k] = v);
+    await _storage.write(_snapshotImagesKey, imgMap);
+  }
+
   // ─── Field Operations ───
   void updateField(String key, dynamic value) {
     final data = inspectionData.value;
@@ -840,16 +931,48 @@ class InspectionFormController extends GetxController {
       if (data.data[key] == value) return;
       data.data[key] = value;
 
-      // Handle dependent fields reset
+      // Keep the typed model fields in sync so _saveSnapshot reads correctly
       if (key == 'make') {
+        data.make = value?.toString() ?? '';
         data.data['model'] = '';
         data.data['variant'] = '';
+        data.model = '';
+        data.variant = '';
+        _userEditedKeys.add('model');
+        _userEditedKeys.add('variant');
       } else if (key == 'model') {
+        data.model = value?.toString() ?? '';
         data.data['variant'] = '';
+        data.variant = '';
+        _userEditedKeys.add('variant');
+      } else if (key == 'variant') {
+        data.variant = value?.toString() ?? '';
+      }
+
+      // Mark this key as user-edited
+      _userEditedKeys.add(key);
+
+      // Sync changes to the list cards if make/model/variant changed
+      if (['make', 'model', 'variant'].contains(key)) {
+        _syncScheduleWithChanges();
       }
 
       inspectionData.refresh();
     }
+  }
+
+  /// Syncs the current make/model/variant to any ScheduleController instances
+  /// so the list cards reflect the updates immediately.
+  void _syncScheduleWithChanges() {
+    final data = inspectionData.value;
+    if (data == null) return;
+
+    ScheduleController.updateScheduleGlobally(
+      appointmentId,
+      make: data.data['make']?.toString(),
+      model: data.data['model']?.toString(),
+      variant: data.data['variant']?.toString(),
+    );
   }
 
   String getFieldValue(String key) {
@@ -1262,11 +1385,14 @@ class InspectionFormController extends GetxController {
 
     isSaving.value = true;
     try {
-      // Build a clean serializable map from data
+      // Write full current form state to the local snapshot.
+      // This is the single source-of-truth for all future re-opens.
+      await _saveSnapshot();
+
+      // Legacy full-draft write kept for backward compatibility
       final draftKey = 'draft_$appointmentId';
       final saveMap = <String, dynamic>{};
       data.data.forEach((key, value) {
-        // Only save primitive types and lists of primitives
         if (value is String || value is num || value is bool || value == null) {
           saveMap[key] = value;
         } else if (value is List) {
@@ -1275,28 +1401,26 @@ class InspectionFormController extends GetxController {
           saveMap[key] = value.toString();
         }
       });
-      // Ensure identity fields
       saveMap['_id'] = data.id;
       saveMap['appointmentId'] = data.appointmentId;
       saveMap['make'] = data.make;
       saveMap['model'] = data.model;
       saveMap['variant'] = data.variant;
       saveMap['status'] = data.status;
-
       await _storage.write(draftKey, saveMap);
-
-      // Also save image paths
       final imgKey = 'draft_images_$appointmentId';
       final imgMap = <String, dynamic>{};
-      imageFiles.forEach((k, v) {
-        imgMap[k] = v;
-      });
+      imageFiles.forEach((k, v) => imgMap[k] = v);
       await _storage.write(imgKey, imgMap);
 
       // debugPrint('💾 Draft saved successfully to local storage');
 
       // Always clear existing snackbars
-      Get.closeAllSnackbars();
+      try {
+        Get.closeAllSnackbars();
+      } catch (e) {
+        // Ignore errors from GetX snackbar system
+      }
 
       // Simple delay to ensure GetX clears the overlay before showing new one
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -1353,7 +1477,13 @@ class InspectionFormController extends GetxController {
           if (rtoNocVal == 'Not Applicable') continue;
         }
 
-        // Conditional requirements for images based on Not Applicable selection
+        // Tax Valid Till visibility logic
+        if (field.key == 'taxValidTill') {
+          final taxVal = getFieldValue('roadTaxValidity');
+          if (taxVal != 'Limited Period') continue;
+        }
+
+        // Conditional requirements for images based on Not Applicable/Not Present selection
         final parentFields = {
           'lhsFoglampImages': 'lhsFoglamp',
           'rhsFoglampImages': 'rhsFoglamp',
@@ -1379,7 +1509,10 @@ class InspectionFormController extends GetxController {
           final parentVal = getFieldValue(parentFields[field.key]!);
           if (parentVal == 'Not Applicable' ||
               parentVal == 'Not Available' ||
-              parentVal == 'Policy Not Available') {
+              parentVal == 'Not Present' ||
+              parentVal == 'Policy Not Available' ||
+              parentVal == 'No' ||
+              parentVal == 'N/A') {
             continue;
           }
         }
@@ -1387,7 +1520,10 @@ class InspectionFormController extends GetxController {
         // Duplicate Key Images requirement
         if (field.key == 'duplicateKeyImages') {
           final dupKeyVal = getFieldValue('duplicateKey');
-          if (dupKeyVal != 'Duplicate Key Available') continue;
+          if (dupKeyVal != 'Duplicate Key Available' &&
+              dupKeyVal != 'Available') {
+            continue;
+          }
         }
 
         // 2. Perform Validation
@@ -1745,8 +1881,12 @@ class InspectionFormController extends GetxController {
           // debugPrint('📋 appointmentId: $appointmentId');
 
           final storage = GetStorage();
-          final userId = storage.read('USER_ID')?.toString() ?? storage.read('user_id')?.toString() ?? '';
-          final userRole = storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
+          final userId =
+              storage.read('USER_ID')?.toString() ??
+              storage.read('user_id')?.toString() ??
+              '';
+          final userRole =
+              storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
           final statusBody = {
             'telecallingId': schedule!.id,
@@ -2386,7 +2526,7 @@ class InspectionFormController extends GetxController {
               top: MediaQuery.of(Get.context!).padding.top + 8,
               right: 12,
               child: GestureDetector(
-                onTap: () => Get.back(),
+                onTap: () => Navigator.of(Get.context!).pop(),
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
@@ -2470,8 +2610,12 @@ class InspectionFormController extends GetxController {
           // debugPrint('🔑 telecallingId: ${schedule!.id}');
 
           final storage = GetStorage();
-          final userId = storage.read('USER_ID')?.toString() ?? storage.read('user_id')?.toString() ?? '';
-          final userRole = storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
+          final userId =
+              storage.read('USER_ID')?.toString() ??
+              storage.read('user_id')?.toString() ??
+              '';
+          final userRole =
+              storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
           final statusBody = {
             'telecallingId': schedule!.id,
@@ -2511,7 +2655,9 @@ class InspectionFormController extends GetxController {
 
       // 7. Show success dialog
       try {
-        Get.closeAllSnackbars();
+        try {
+          Get.closeAllSnackbars();
+        } catch (e) {}
       } catch (_) {}
       _showSuccessDialog(
         response['message'] ?? 'Re-Inspection updated successfully!',
@@ -2519,7 +2665,9 @@ class InspectionFormController extends GetxController {
     } catch (e) {
       // debugPrint('❌ Re-Inspection submit error: $e');
       try {
-        Get.closeAllSnackbars();
+        try {
+          Get.closeAllSnackbars();
+        } catch (e) {}
       } catch (_) {}
       _showErrorDialog(e.toString());
     } finally {
@@ -2981,25 +3129,27 @@ class InspectionFormController extends GetxController {
     try {
       isFetchingDetails.value = true;
 
+      // ── Step 1: Fetch vehicle registration details ──
       final response = await ApiService.post(
         ApiConstants.fetchVehicleDetailsUrl,
         {"vehicleRegistrationNumber": regNo, "userId": userId},
       );
 
-      // Print auto-fetched data to console as requested
-      // debugPrint('🚀 [AutoFetch] Response: $response');
-
       // Access data.result as specified
       final result = response['data']?['result'];
       if (result != null && result is Map<String, dynamic>) {
         _applyFetchedData(result);
-        TLoaders.successSnackBar(
-          title: 'Details Fetched',
-          message: 'Vehicle information has been auto-filled.',
-        );
       } else {
         throw 'No details found for this registration number.';
       }
+
+      // ── Step 2: Fetch Make/Model/Variant from telecalling API ──
+      await _fetchMakeModelVariantFromTelecalling();
+
+      TLoaders.successSnackBar(
+        title: 'Details Fetched',
+        message: 'Vehicle information has been auto-filled.',
+      );
     } catch (e) {
       // debugPrint('❌ AutoFetch Error: $e');
       TLoaders.customToast(message: e.toString());
@@ -3008,11 +3158,69 @@ class InspectionFormController extends GetxController {
     }
   }
 
-  void _applyFetchedData(Map<String, dynamic> result) {
-    // debugPrint(
-    // '🧩 [AutoFetch] Starting data mapping. Available keys: ${result.keys.toList()}',
-    // );
+  /// Calls the telecalling API to find the record matching this appointmentId
+  /// and autofills Make, Model, and Variant from that record.
+  Future<void> _fetchMakeModelVariantFromTelecalling() async {
+    try {
+      final engineerNumber =
+          GetStorage().read('INSPECTION_ENGINEER_NUMBER') ?? '9090909090';
 
+      // Try all relevant statuses to find the matching appointment
+      final statuses = ['Scheduled', 'Running', 'Re-Inspection', 'Re-Scheduled'];
+
+      for (final status in statuses) {
+        try {
+          final response = await ApiService.post(
+            ApiConstants.inspectionEngineerSchedulesUrl,
+            {
+              "inspectionStatus": status,
+              "inspectionEngineerNumber": engineerNumber,
+            },
+          );
+
+          final List<dynamic> dataList = response['data'] ?? [];
+          for (final record in dataList) {
+            if (record is Map<String, dynamic> &&
+                record['appointmentId']?.toString() == appointmentId) {
+              // Found the matching record — extract make/model/variant
+              final make = record['make']?.toString().trim() ?? '';
+              final model = record['model']?.toString().trim() ?? '';
+              final variant = record['variant']?.toString().trim() ?? '';
+
+              final data = inspectionData.value;
+              if (data != null) {
+                if (make.isNotEmpty) {
+                  data.data['make'] = make;
+                  data.make = make;
+                  _userEditedKeys.add('make');
+                }
+                if (model.isNotEmpty) {
+                  data.data['model'] = model;
+                  data.model = model;
+                  _userEditedKeys.add('model');
+                }
+                if (variant.isNotEmpty) {
+                  data.data['variant'] = variant;
+                  data.variant = variant;
+                  _userEditedKeys.add('variant');
+                }
+                _syncScheduleWithChanges();
+                inspectionData.refresh();
+              }
+              return; // Found and applied — stop searching
+            }
+          }
+        } catch (_) {
+          // Continue to next status if this one fails
+        }
+      }
+    } catch (e) {
+      // debugPrint('⚠️ Telecalling fetch for Make/Model/Variant failed: $e');
+      // Non-critical: don't block the main flow
+    }
+  }
+
+  void _applyFetchedData(Map<String, dynamic> result) {
     // Helper to find a value by checking multiple potential keys case-insensitively
     dynamic find(List<String> keys) {
       final searchKeys =
@@ -3036,6 +3244,30 @@ class InspectionFormController extends GetxController {
       return null;
     }
 
+    /// Title-case helper: "ACTIVE" → "Active", "PETROL" → "Petrol"
+    String titleCase(String s) {
+      if (s.isEmpty) return s;
+      return s[0].toUpperCase() + s.substring(1).toLowerCase();
+    }
+
+    /// Finds the best existing dropdown match for [value].
+    /// Returns the matched option string if found, otherwise null.
+    String? matchDropdownOption(String fieldKey, String value) {
+      // 1. Check static field definition options
+      for (final section in InspectionFieldDefs.sections) {
+        for (final field in section.fields) {
+          if (field.key == fieldKey && field.options.isNotEmpty) {
+            // Try exact match first
+            for (final opt in field.options) {
+              if (opt.toLowerCase() == value.toLowerCase()) return opt;
+            }
+            return null;
+          }
+        }
+      }
+      return null;
+    }
+
     final mapping = {
       'registrationDate': ['registered', 'registration_date', 'reg_date'],
       'fitnessValidity': ['fitnessUpto', 'fitness_upto', 'fitness_valid_upto'],
@@ -3046,7 +3278,6 @@ class InspectionFormController extends GetxController {
         'manufacturing_date',
         'mfgDate',
       ],
-      'fuelType': ['fuelType', 'fuel_type', 'fuel'],
       'seatingCapacity': ['seatingCapacity', 'seating_capacity', 'seat_cap'],
       'color': ['colorType', 'color', 'colour'],
       'cubicCapacity': ['cubicCapacity', 'cubic_capacity', 'cc'],
@@ -3072,42 +3303,130 @@ class InspectionFormController extends GetxController {
       ],
       'pucValidity': ['pollutionCertificateUpto', 'puc_upto', 'puc_validity'],
       'pucNumber': ['pollutionCertificateNumber', 'puc_number', 'pucNo'],
-      'rcStatus': ['status', 'rc_status', 'status_as_on'],
       'blacklistStatus': [
         'blacklistStatus',
         'is_blacklisted',
         'blacklist_details',
       ],
       'city': ['city', 'city_name'],
-      'registrationState': ['state', 'registration_state'],
-      'make': ['make', 'maker', 'maker_name'],
-      'model': ['model', 'maker_model'],
-      'variant': ['variant', 'series'],
+      'taxValidTill': ['taxUpto', 'tax_validity', 'tax_paid_upto', 'tax_upto'],
     };
 
     bool updatedAny = false;
     mapping.forEach((targetKey, sourceKeys) {
       final value = find(sourceKeys);
       if (value != null) {
-        // Log mapping attempt
-        // debugPrint(
-        // '📍 Mapping [$targetKey] <--- Found value: "$value" in source keys: $sourceKeys',
-        // );
-
-        // Overwrite the field with the new value
         updateField(targetKey, value.toString());
         updatedAny = true;
-        // debugPrint('✅ [$targetKey] Overwrite SUCCESS');
       }
     });
 
+    // ── 1. Registration State: Extract from rto value ──
+    // e.g. "PVD KOLKATA, West Bengal" → "West Bengal"
+    final rtoValue = find(['rto', 'registered_rto', 'rto_name']);
+    if (rtoValue != null) {
+      final rtoStr = rtoValue.toString();
+      // Set full RTO value
+      updateField('registeredRto', rtoStr);
+      updatedAny = true;
+
+      // Extract state: everything after the last comma
+      if (rtoStr.contains(',')) {
+        final state = rtoStr.split(',').last.trim();
+        if (state.isNotEmpty) {
+          updateField('registrationState', state);
+        }
+      }
+    }
+
+    // ── 2. Fuel Type: Convert to Title Case and match dropdown option ──
+    final rawFuel = find(['fuelType', 'fuel_type', 'fuel']);
+    if (rawFuel != null) {
+      final fuelStr = rawFuel.toString().trim();
+      final formattedFuel = titleCase(fuelStr);
+
+      // Check if an exact match exists in the dropdown options
+      final matched = matchDropdownOption('fuelType', formattedFuel);
+      if (matched != null) {
+        updateField('fuelType', matched);
+      } else {
+        // If no match, add it temporarily to the dropdown options
+        final existingOptions = dropdownOptions['fuelType'] ?? [
+          'Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid', 'LPG',
+        ];
+        if (!existingOptions.any((o) => o.toLowerCase() == formattedFuel.toLowerCase())) {
+          dropdownOptions['fuelType'] = [...existingOptions, formattedFuel];
+        }
+        updateField('fuelType', formattedFuel);
+      }
+      updatedAny = true;
+    }
+
+    // ── 3. RC Status: Convert to Title Case and match dropdown ──
+    final rawStatus = find(['status', 'rc_status', 'status_as_on']);
+    if (rawStatus != null) {
+      final statusStr = rawStatus.toString().trim();
+      final formattedStatus = titleCase(statusStr);
+
+      // Check if an exact match exists in the dropdown options
+      final matched = matchDropdownOption('rcStatus', formattedStatus);
+      if (matched != null) {
+        updateField('rcStatus', matched);
+      } else {
+        // If no match, add it temporarily to the dropdown options
+        final existingOptions = dropdownOptions['rcStatus'] ?? [
+          'Active', 'Inactive', 'Suspended',
+        ];
+        if (!existingOptions.any((o) => o.toLowerCase() == formattedStatus.toLowerCase())) {
+          dropdownOptions['rcStatus'] = [...existingOptions, formattedStatus];
+        }
+        updateField('rcStatus', formattedStatus);
+      }
+      updatedAny = true;
+    }
+
+    // ── 4. Make / Model / Variant: Use API values first, then schedule as fallback ──
+    final rawMake = find(['make', 'maker', 'maker_name']);
+    final rawModel = find(['model', 'maker_model']);
+    final rawVariant = find(['variant', 'series']);
+
+    final makeVal = rawMake?.toString().trim() ?? '';
+    final modelVal = rawModel?.toString().trim() ?? '';
+    final variantVal = rawVariant?.toString().trim() ?? '';
+
+    // Use API values; if empty, fall back to schedule data
+    final finalMake = makeVal.isNotEmpty ? makeVal : (schedule?.make ?? '');
+    final finalModel = modelVal.isNotEmpty ? modelVal : (schedule?.model ?? '');
+    final finalVariant = variantVal.isNotEmpty ? variantVal : (schedule?.variant ?? '');
+
+    if (finalMake.isNotEmpty) {
+      // Set make first (without clearing model/variant via updateField),
+      // then model, then variant — in order.
+      final data = inspectionData.value;
+      if (data != null) {
+        data.data['make'] = finalMake;
+        data.make = finalMake;
+        _userEditedKeys.add('make');
+
+        if (finalModel.isNotEmpty) {
+          data.data['model'] = finalModel;
+          data.model = finalModel;
+          _userEditedKeys.add('model');
+        }
+
+        if (finalVariant.isNotEmpty) {
+          data.data['variant'] = finalVariant;
+          data.variant = finalVariant;
+          _userEditedKeys.add('variant');
+        }
+
+        _syncScheduleWithChanges();
+        updatedAny = true;
+      }
+    }
+
     if (updatedAny) {
-      // debugPrint('✨ Data mapping completed. Refreshing UI...');
       inspectionData.refresh();
-    } else {
-      // debugPrint(
-      // '📢 No fields were updated (all fields may already have data).',
-      // );
     }
   }
 

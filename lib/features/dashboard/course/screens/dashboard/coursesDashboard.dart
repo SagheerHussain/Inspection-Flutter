@@ -4,14 +4,13 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
-import '../../../../../utils/constants/sizes.dart';
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../utils/helpers/helper_functions.dart';
+import '../../../../../common/widgets/custom_shapes/containers/primary_header_container.dart';
 import '../../controllers/dashboard_stats_controller.dart';
 import 'widgets/appbar.dart';
 import 'widgets/banners.dart';
-import 'widgets/categories.dart';
 import 'widgets/search.dart';
 import 'widgets/top_courses.dart';
 
@@ -36,109 +35,87 @@ class CoursesDashboard extends StatelessWidget {
             dark ? Brightness.light : Brightness.dark,
       ),
       child: Scaffold(
+        extendBodyBehindAppBar: true,
         appBar: const DashboardAppBar(),
         drawer: TDrawer(),
         body: RefreshIndicator(
+          displacement: 110, // Positioned perfectly below the glass app bar
+          backgroundColor: dark ? TColors.darkContainer : Colors.white,
+          color: TColors.primary,
+          strokeWidth: 3,
           onRefresh: () async {
-            // Clear search on refresh as requested
             if (Get.isRegistered<DashboardSearchController>()) {
               Get.find<DashboardSearchController>().clearSearch();
             }
             final stats = DashboardStatsController.instance;
             await stats.refresh();
           },
-          color: TColors.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            child: Container(
-              // padding: const EdgeInsets.all(TSizes.lg), // Removed for full screen layout
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Header Section
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Row 1: Greeting
-                        Obx(
-                          () => Text(
-                            UserController
-                                    .instance
-                                    .user
-                                    .value
-                                    .fullName
-                                    .isNotEmpty
-                                ? "Hey, ${UserController.instance.user.value.fullName}"
-                                : (GetStorage().read('REMEMBER_ME_USERNAME') ??
-                                        "User")
-                                    .toString()
-                                    .isNotEmpty
-                                ? "Hey, ${GetStorage().read('REMEMBER_ME_USERNAME')}"
-                                : "Hey, User",
-                            style: txtTheme.bodyMedium?.copyWith(
-                              color: Colors.grey,
+          child: LayoutBuilder(
+            builder: (context, constraints) => SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Header Section with Custom Shape
+                    TPrimaryHeaderContainer(
+                      child: Padding(
+                        padding: const EdgeInsets.only(
+                          left: 16,
+                          right: 16,
+                          bottom: 35, // More space below search
+                          top: 110, // More space from top
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Greeting
+                            Obx(
+                              () => Text(
+                                UserController.instance.user.value.fullName.isNotEmpty
+                                    ? "Hey, ${UserController.instance.user.value.fullName}"
+                                    : (GetStorage().read('REMEMBER_ME_USERNAME') ?? "User")
+                                        .toString()
+                                        .isNotEmpty
+                                    ? "Hey, ${GetStorage().read('REMEMBER_ME_USERNAME')}"
+                                    : "Hey, User",
+                                style: txtTheme.bodyMedium?.copyWith(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 4),
+                            // Welcome Back
+                            Text(
+                              "Welcome Back 👋",
+                              style: txtTheme.displaySmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            // Search Box inside header
+                            DashboardSearchBox(txtTheme: txtTheme),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        // Row 2: Welcome Back
-                        Text(
-                          "Welcome Back 👋",
-                          style: txtTheme.displayMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        // Row 3: Platform Name
-                        Text(
-                          "Otobix Inspections Platform",
-                          style: txtTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: TSizes.lg),
-                  // Search Box
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: DashboardSearchBox(txtTheme: txtTheme),
-                  ),
-                  const SizedBox(height: TSizes.lg),
-                  // Categories
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: DashboardCategories(txtTheme: txtTheme),
-                  ),
-                  const SizedBox(height: TSizes.lg),
-                  // Banners (Row 4: Schedules + Running)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: DashboardBanners(txtTheme: txtTheme),
-                  ),
-                  const SizedBox(height: TSizes.lg + 4),
-                  // Row 5: Quick Links Title
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      "Quick Links",
-                      style: txtTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                        fontSize: txtTheme.headlineMedium!.fontSize! * 1.2,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  // Row 6: Quick Links Carousel
-                  DashboardTopCourses(txtTheme: txtTheme),
-                ],
+
+                    const SizedBox(height: 10),
+
+                    // Stats Banners
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: DashboardBanners(txtTheme: txtTheme),
+                    ),
+
+                    const SizedBox(height: 12),
+                    DashboardTopCourses(txtTheme: txtTheme),
+                    const SizedBox(height: 20),
+                  ],
+                ),
               ),
             ),
           ),
