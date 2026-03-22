@@ -19,9 +19,9 @@ class EnvironmentController extends GetxController {
       if (Get.isRegistered<LoginController>()) {
         final loginController = Get.find<LoginController>();
         if (isProduction) {
-          loginController.userName.text = 'Kazi Sohel Nawaz';
-          loginController.phoneNumber.text = '9830300302';
-          loginController.password.text = 'Kazi_S_N@1974#';
+          loginController.userName.text = 'sagheer';
+          loginController.phoneNumber.text = '9090909090';
+          loginController.password.text = 'Admin@123';
         } else {
           loginController.userName.text = 'inspection';
           loginController.phoneNumber.text = '9090909090';

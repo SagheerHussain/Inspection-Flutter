@@ -32,6 +32,8 @@
 	<string>This app needs microphone access to record engine sound in videos.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to select vehicle images.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to accurately tag the vehicle inspection site for record authenticity.</string>
 	<!-- ===== Background modes for OneSignal ===== -->
 	<key>UIBackgroundModes</key>
 	<array>
