@@ -15,6 +15,7 @@ import '../helpers/car_model_mapper.dart';
 import '../helpers/car_model_debug_printer.dart';
 import '../../schedules/models/schedule_model.dart';
 import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
+import '../../../personalization/controllers/user_controller.dart';
 import '../../schedules/controllers/schedule_controller.dart';
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
 
@@ -3162,8 +3163,7 @@ class InspectionFormController extends GetxController {
   /// and autofills Make, Model, and Variant from that record.
   Future<void> _fetchMakeModelVariantFromTelecalling() async {
     try {
-      final engineerNumber =
-          GetStorage().read('INSPECTION_ENGINEER_NUMBER') ?? '9090909090';
+      final userEmail = UserController.instance.user.value.email;
 
       // Try all relevant statuses to find the matching appointment
       final statuses = ['Scheduled', 'Running', 'Re-Inspection', 'Re-Scheduled'];
@@ -3174,7 +3174,7 @@ class InspectionFormController extends GetxController {
             ApiConstants.inspectionEngineerSchedulesUrl,
             {
               "inspectionStatus": status,
-              "inspectionEngineerNumber": engineerNumber,
+              "allocatedTo": userEmail,
             },
           );
 

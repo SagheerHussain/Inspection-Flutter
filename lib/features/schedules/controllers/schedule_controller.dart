@@ -3,6 +3,7 @@ import 'package:get_storage/get_storage.dart';
 import 'package:get/get.dart';
 
 import '../../../data/services/api/api_service.dart';
+import '../../../personalization/controllers/user_controller.dart';
 import '../../../utils/constants/api_constants.dart';
 import '../../../utils/constants/inspection_statuses.dart';
 import '../../../utils/popups/loaders.dart';
@@ -118,9 +119,8 @@ class ScheduleController extends GetxController {
       _currentIndex = 0;
       hasMoreData.value = true;
 
-      // Retrieve stored engineer number
-      final engineerNumber =
-          GetStorage().read('INSPECTION_ENGINEER_NUMBER') ?? '9090909090';
+      // Retrieve stored user email
+      final userEmail = UserController.instance.user.value.email;
 
       List<ScheduleModel> allCombinedRecords = [];
 
@@ -142,7 +142,7 @@ class ScheduleController extends GetxController {
                 ApiConstants.inspectionEngineerSchedulesUrl,
                 {
                   "inspectionStatus": status,
-                  "inspectionEngineerNumber": engineerNumber,
+                  "allocatedTo": userEmail,
                 },
               );
               final List<dynamic> dataList = response['data'] ?? [];
@@ -183,7 +183,7 @@ class ScheduleController extends GetxController {
                 ApiConstants.inspectionEngineerSchedulesUrl,
                 {
                   "inspectionStatus": status,
-                  "inspectionEngineerNumber": engineerNumber,
+                  "allocatedTo": userEmail,
                 },
               );
               final List<dynamic> dataList = response['data'] ?? [];
@@ -229,7 +229,7 @@ class ScheduleController extends GetxController {
                 ApiConstants.inspectionEngineerSchedulesUrl,
                 {
                   "inspectionStatus": status,
-                  "inspectionEngineerNumber": engineerNumber,
+                  "allocatedTo": userEmail,
                 },
               );
               final List<dynamic> dataList = response['data'] ?? [];

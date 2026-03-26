@@ -7,6 +7,7 @@ import 'package:get_storage/get_storage.dart';
 import '../../../../data/services/api/api_service.dart';
 import '../../../../utils/constants/api_constants.dart';
 import '../../../../utils/constants/inspection_statuses.dart';
+import '../../../../personalization/controllers/user_controller.dart';
 import '../../../schedules/models/schedule_model.dart';
 
 /// Central controller that loads ALL records once and exposes
@@ -57,8 +58,7 @@ class DashboardStatsController extends GetxController {
   Future<void> fetchAllRecords() async {
     try {
       isLoading.value = true;
-      final engineerNumber =
-          GetStorage().read('INSPECTION_ENGINEER_NUMBER') ?? '9090909090';
+      final userEmail = UserController.instance.user.value.email;
 
       // Use constants from InspectionStatuses
       final statuses = [
@@ -84,7 +84,7 @@ class DashboardStatsController extends GetxController {
               ApiConstants.inspectionEngineerSchedulesUrl,
               {
                 "inspectionStatus": status,
-                "inspectionEngineerNumber": engineerNumber,
+                  "allocatedTo": userEmail,
               },
             );
             final List<dynamic> dataList = response['data'] ?? [];

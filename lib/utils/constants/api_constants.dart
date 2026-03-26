@@ -5,7 +5,7 @@ class ApiConstants {
   ApiConstants._();
 
   static const String _prodBaseUrl =
-      'https://ob-dealerapp-kong.onrender.com/api/';
+      'https://otobix-app-backend-development.onrender.com/api/';
 
   static final _storage = GetStorage();
   static const String _envKey = 'API_ENVIRONMENT';

@@ -23,7 +23,7 @@ class ApiService {
     await _storage.remove(_tokenKey);
   }
 
-  /// Common headers
+  /// Common headers with auth
   static Map<String, String> get _headers {
     final headers = <String, String>{
       'Content-Type': 'application/json',
@@ -34,6 +34,24 @@ class ApiService {
       headers['Authorization'] = 'Bearer $token';
     }
     return headers;
+  }
+
+  /// Static backend token for the inspection/telecalling API
+  static const String _backendToken =
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MDBhYzc2NTA4OGQxYTA2ODc3MDU0NCIsInVzZXJOYW1lIjoiY3VzdG9tZXIiLCJ1c2VyVHlwZSI6IkN1c3RvbWVyIiwiaWF0IjoxNzY0MzMxNjMxLCJleHAiOjIwNzk2OTE2MzF9.oXw1J4ca1XoIAg-vCO2y0QqZIq0VWHdYBrl2y9iIv4Q';
+
+  /// Determine correct headers based on URL
+  static Map<String, String> _headersForUrl(String url) {
+    // The development backend uses its own JWT token, not the CRM token
+    if (url.contains('otobix-app-backend-development.onrender.com') ||
+        url.contains('ob-dealerapp-kong.onrender.com')) {
+      return <String, String>{
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Authorization': 'Bearer $_backendToken',
+      };
+    }
+    return _headers;
   }
 
   /// POST request
@@ -58,12 +76,14 @@ class ApiService {
         }
       }
 
+      final headers = _headersForUrl(url);
       debugPrint('📡 POST: $url');
+      debugPrint('🔑 Headers: $headers');
       debugPrint('📦 Body: ${jsonEncode(body)}');
 
       final response = await http.post(
         Uri.parse(url),
-        headers: _headers,
+        headers: headers,
         body: jsonEncode(body),
       );
 
@@ -90,7 +110,7 @@ class ApiService {
     try {
       debugPrint('📡 GET: $url');
 
-      final response = await http.get(Uri.parse(url), headers: _headers);
+      final response = await http.get(Uri.parse(url), headers: _headersForUrl(url));
 
       debugPrint('📬 Status: ${response.statusCode}');
 
@@ -120,7 +140,7 @@ class ApiService {
 
       final response = await http.put(
         Uri.parse(url),
-        headers: _headers,
+        headers: _headersForUrl(url),
         body: jsonEncode(body),
       );
 
