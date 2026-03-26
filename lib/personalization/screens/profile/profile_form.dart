@@ -3,7 +3,6 @@ import 'package:line_awesome_flutter/line_awesome_flutter.dart';
 
 import '../../../../../personalization/controllers/user_controller.dart';
 import '../../../../../utils/constants/sizes.dart';
-import '../../../../../utils/constants/text_strings.dart';
 
 class ProfileFormScreen extends StatelessWidget {
   const ProfileFormScreen({super.key});
@@ -24,11 +23,11 @@ class ProfileFormScreen extends StatelessWidget {
         ),
         const SizedBox(height: TSizes.xl - 20),
         TextFormField(
-          controller: controller.phoneNo,
+          controller: controller.email,
           enabled: false,
           decoration: const InputDecoration(
-            label: Text(TTexts.tPhoneNo),
-            prefixIcon: Icon(LineAwesomeIcons.phone_solid),
+            label: Text("Email"),
+            prefixIcon: Icon(LineAwesomeIcons.envelope_solid),
           ),
         ),
       ],

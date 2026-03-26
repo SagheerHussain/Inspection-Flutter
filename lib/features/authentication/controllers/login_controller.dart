@@ -5,10 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
-import '../../../data/services/api/api_service.dart';
-import '../../../utils/constants/api_constants.dart';
 import '../../../utils/constants/image_strings.dart';
 import '../../../utils/helpers/network_manager.dart';
+import '../../../../../../utils/constants/enums.dart';
+import '../../../../../../utils/constants/api_constants.dart';
+import '../../../../../../data/services/api/api_service.dart';
+import '../../../../../../personalization/controllers/user_controller.dart';
+import '../../../../../../personalization/models/user_model.dart';
 import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
 
 class LoginController extends GetxController {
@@ -29,18 +32,10 @@ class LoginController extends GetxController {
 
   @override
   void onInit() {
-    // Pre-fill with saved credentials or default based on environment
-    final isProd = ApiConstants.isProduction;
-
-    userName.text =
-        localStorage.read('REMEMBER_ME_USERNAME') ??
-        (isProd ? 'sagheer' : 'inspection');
-    phoneNumber.text =
-        localStorage.read('REMEMBER_ME_PHONE') ??
-        (isProd ? '9090909090' : '9090909090');
-    password.text =
-        localStorage.read('REMEMBER_ME_PASSWORD') ??
-        (isProd ? 'Admin@123' : 'Admin@123');
+    // Pre-filling with credentials disabled as per production requirements
+    userName.text = '';
+    phoneNumber.text = '';
+    password.text = '';
     super.onInit();
   }
 
@@ -67,75 +62,54 @@ class LoginController extends GetxController {
         return;
       }
 
-      final userPhone = phoneNumber.text.trim();
+      // 1. Authenticate using Custom CRM API
+      final Map<String, dynamic> response = await ApiService.post(
+        ApiConstants.loginUrl,
+        {
+          'userName': userName.text.trim(),
+          'password': password.text.trim(),
+        },
+      );
 
-      // Call Backend API
-      final response = await ApiService.post(ApiConstants.loginUrl, {
-        'userName': userName.text.trim(),
-        'phoneNumber': userPhone,
-        'password': password.text.trim(),
-      });
+      // Check if response contains user data
+      if (response['user'] == null) {
+        throw 'Invalid response from server. No user found.';
+      }
 
-      // Role Check
-      // Validating based on userType as per API response
-      final userType = response['user']?['userType']?.toString() ?? '';
-      if (userType != 'Inspection Engineer') {
+      // 2. Map response to UserModel and perform local checks
+      final userData = response['user'] as Map<String, dynamic>;
+      final user = UserModel.fromJson(userData['_id'] ?? '', userData);
+
+      // 3. Only allow login for users whose status is "Approved"
+      if (user.verificationStatus != VerificationStatus.approved) {
         TFullScreenLoader.stopLoading();
         TLoaders.warningSnackBar(
-          title: 'Access Denied',
-          message: 'You are not authorized for this app',
+          title: 'Account Not Approved',
+          message: 'Your account is currently ${user.verificationStatus.name}. Please contact support.',
         );
         return;
       }
 
-      // Save auth token if present
-      if (response['token'] != null) {
-        await ApiService.saveToken(response['token']);
-      }
-
-      // Save credentials for remember me and session
-      localStorage.write('REMEMBER_ME_USERNAME', userName.text.trim());
-      localStorage.write('REMEMBER_ME_PHONE', userPhone);
-      localStorage.write('REMEMBER_ME_PASSWORD', password.text.trim());
-
-      // Specifically save the engineer number and details for future API calls
-      localStorage.write('INSPECTION_ENGINEER_NUMBER', userPhone);
-
-      // Robustly extract user ID from various possible keys
-      final userObj = response['user'] as Map<String, dynamic>? ?? {};
-      final storedUserId =
-          (userObj['_id'] ??
-                  userObj['id'] ??
-                  userObj['uid'] ??
-                  userObj['userId'])
-              ?.toString() ??
-          '';
-
+      // 4. Persistence - Save user IDs and roles for the rest of the app
+      final userController = Get.put(UserController());
+      userController.user.value = user;
+      
+      final String storedUserId = user.id;
       localStorage.write('USER_ID', storedUserId);
       localStorage.write('user_id', storedUserId);
       localStorage.write('uid', storedUserId);
       localStorage.write('mongodb_id', storedUserId);
-      localStorage.write('USER_ROLE', userType);
+      localStorage.write('INSPECTION_ENGINEER_NUMBER', user.phoneNumber);
+      localStorage.write('USER_ROLE', user.role.name);
 
-      // Link device to user in OneSignal with MongoDB user ID
-      final mongoUserId = response['user']?['_id']?.toString() ?? '';
-      debugPrint(
-        '🔑 LoginController: API user._id = "${response['user']?['_id']}"',
-      );
-      debugPrint('🔑 LoginController: mongoUserId = "$mongoUserId"');
-      debugPrint(
-        '🔑 LoginController: mongoUserId.isEmpty = ${mongoUserId.isEmpty}',
-      );
-      if (mongoUserId.isNotEmpty) {
-        debugPrint(
-          '🔑 LoginController: Calling NotificationService.login("$mongoUserId")...',
-        );
-        await NotificationService.instance.login(mongoUserId);
-        debugPrint('🔑 LoginController: NotificationService.login() completed');
-      } else {
-        debugPrint(
-          '⚠️ LoginController: mongoUserId is EMPTY — skipping OneSignal login!',
-        );
+      // Save token if present
+      if (response['token'] != null) {
+        await ApiService.saveToken(response['token']);
+      }
+
+      // Link device to user in OneSignal
+      if (storedUserId.isNotEmpty) {
+        await NotificationService.instance.login(storedUserId);
       }
 
       // Remove Loader

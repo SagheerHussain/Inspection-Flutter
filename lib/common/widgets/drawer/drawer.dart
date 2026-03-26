@@ -3,7 +3,6 @@ import '../../../personalization/controllers/theme_controller.dart';
 import '../../../personalization/screens/profile/update_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:iconsax/iconsax.dart';
 
 import '../../../personalization/controllers/user_controller.dart';
@@ -40,10 +39,9 @@ class TDrawer extends StatelessWidget {
               children: [
                 // Name
                 Text(
-                  userController.user.value.fullName.isNotEmpty
-                      ? userController.user.value.fullName
-                      : (GetStorage().read('REMEMBER_ME_USERNAME') ?? "User")
-                          .toString(),
+                  userController.user.value.userName.isNotEmpty
+                      ? userController.user.value.userName
+                      : "User",
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: dark ? Colors.white : TColors.textPrimary,

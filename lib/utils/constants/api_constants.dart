@@ -4,46 +4,46 @@ import 'package:get_storage/get_storage.dart';
 class ApiConstants {
   ApiConstants._();
 
-  static const String _devBaseUrl =
-      'https://otobix-app-backend-development.onrender.com/api/';
   static const String _prodBaseUrl =
       'https://ob-dealerapp-kong.onrender.com/api/';
 
   static final _storage = GetStorage();
   static const String _envKey = 'API_ENVIRONMENT';
 
-  /// Get current environment: 'development' or 'production'
-  static String get environment => _storage.read(_envKey) ?? 'development';
+  /// Get current environment: always returns 'production' as requested
+  static String get environment => 'production';
 
   /// Check if using production
-  static bool get isProduction => environment == 'production';
+  static bool get isProduction => true;
 
-  /// Get the active base URL — switched to Development by default as requested
-  static String get baseUrl => isProduction ? _prodBaseUrl : _devBaseUrl;
+  /// Get the active base URL — permanently set to Production
+  static String get baseUrl => _prodBaseUrl;
 
-  /// Switch to production
+  /// Switch to production (Now redundant but kept for compatibility)
   static Future<void> switchToProduction() async {
     await _storage.write(_envKey, 'production');
   }
 
-  /// Switch to development
+  /// Switch to development (Disabled)
   static Future<void> switchToDevelopment() async {
-    await _storage.write(_envKey, 'development');
+    // await _storage.write(_envKey, 'development');
   }
 
-  /// Toggle environment
+  /// Toggle environment (Disabled)
   static Future<void> toggleEnvironment() async {
+    /* 
     if (isProduction) {
       await switchToDevelopment();
     } else {
       await switchToProduction();
     }
+    */
   }
 
   // ──────────────────────────────────────────
   // AUTH ENDPOINTS
   // ──────────────────────────────────────────
-  static String get loginUrl => '${baseUrl}user/login';
+  static String get loginUrl => 'https://otobixcrm.vercel.app/api/users/login';
 
   // ──────────────────────────────────────────
   // SCHEDULE / TELECALLING ENDPOINTS
@@ -75,13 +75,13 @@ class ApiConstants {
   static String get carUpdateUrl => '${baseUrl}car/update';
 
   // ──────────────────────────────────────────
-  // INSPECTION SUBMISSION ENDPOINTS (Dev)
+  // INSPECTION SUBMISSION ENDPOINTS
   // ──────────────────────────────────────────
   static String get inspectionSubmitUrl =>
-      '${_devBaseUrl}inspection/car/add-car-through-inspection';
+      '${baseUrl}inspection/car/add-car-through-inspection';
 
   static String get fetchVehicleDetailsUrl =>
-      '${_devBaseUrl}customer/sell-my-car/fetch-vehicle-registration-details';
+      '${baseUrl}customer/sell-my-car/fetch-vehicle-registration-details';
 
   static String get getAllDropdownsUrl =>
       '${baseUrl}inspection/dropdowns/get-all-dropdowns-list';

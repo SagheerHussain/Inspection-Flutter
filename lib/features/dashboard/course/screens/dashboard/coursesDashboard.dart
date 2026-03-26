@@ -2,7 +2,6 @@ import 'package:inspection_app/common/widgets/drawer/drawer.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
 
 import '../../../../../utils/constants/colors.dart';
 import '../../../../../personalization/controllers/user_controller.dart';
@@ -73,12 +72,8 @@ class CoursesDashboard extends StatelessWidget {
                             // Greeting
                             Obx(
                               () => Text(
-                                UserController.instance.user.value.fullName.isNotEmpty
-                                    ? "Hey, ${UserController.instance.user.value.fullName}"
-                                    : (GetStorage().read('REMEMBER_ME_USERNAME') ?? "User")
-                                        .toString()
-                                        .isNotEmpty
-                                    ? "Hey, ${GetStorage().read('REMEMBER_ME_USERNAME')}"
+                                UserController.instance.user.value.userName.isNotEmpty
+                                    ? "Hey, ${UserController.instance.user.value.userName}"
                                     : "Hey, User",
                                 style: txtTheme.bodyMedium?.copyWith(
                                   color: Colors.white.withOpacity(0.8),

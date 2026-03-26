@@ -125,4 +125,21 @@ class UserRepository extends GetxController {
       throw 'Something went wrong. Please try again';
     }
   }
+
+  /// Function to find email by Username
+  Future<String?> getEmailByUsername(String username) async {
+    try {
+      final querySnapshot =
+          await _db
+              .collection("Users")
+              .where("userName", isEqualTo: username)
+              .get();
+      if (querySnapshot.docs.isNotEmpty) {
+        return querySnapshot.docs.first.get('email') as String?;
+      }
+      return null;
+    } catch (e) {
+      throw 'Error retrieving email: $e';
+    }
+  }
 }

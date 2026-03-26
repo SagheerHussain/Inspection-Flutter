@@ -8,6 +8,7 @@ import 'package:get_storage/get_storage.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:inspection_app/data/services/notifications/notification_sevice.dart';
 
+import '../../../features/authentication/controllers/login_controller.dart';
 import '../../../features/authentication/screens/login/login_screen.dart';
 import '../../../features/authentication/screens/signup/verify_email.dart';
 import '../../../features/dashboard/course/screens/dashboard/coursesDashboard.dart';
@@ -396,6 +397,15 @@ class AuthenticationRepository extends GetxController {
       await deviceStorage.remove('INSPECTION_ENGINEER_NUMBER');
       await deviceStorage.remove('USER_ID');
       await deviceStorage.remove('USER_ROLE');
+
+      // Clear LoginController fields if registered to prevent auto-fill on next visit
+      try {
+        if (Get.isRegistered<LoginController>()) {
+          final loginController = Get.find<LoginController>();
+          loginController.userName.clear();
+          loginController.password.clear();
+        }
+      } catch (_) {}
 
       Get.offAll(() => const LoginScreen());
     } on FirebaseAuthException catch (e) {

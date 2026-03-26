@@ -8,6 +8,7 @@ import 'address_model.dart';
 class UserModel {
   final String id;
   String fullName;
+  String userName;
   String email;
   String phoneNumber;
   String profilePicture;
@@ -29,6 +30,7 @@ class UserModel {
     required this.id,
     required this.email,
     this.fullName = '',
+    this.userName = '',
     this.phoneNumber = '',
     this.profilePicture = '',
     this.role = AppRole.user,
@@ -78,6 +80,7 @@ class UserModel {
     return {
       'id': id,
       'fullName': fullName,
+      'userName': userName,
       'email': email,
       'phoneNumber': phoneNumber,
       'profilePicture': profilePicture,
@@ -110,6 +113,7 @@ class UserModel {
     return UserModel(
       id: id,
       fullName: data.containsKey('fullName') ? data['fullName'] ?? '' : '',
+      userName: data.containsKey('userName') ? data['userName'] ?? '' : '',
       email: data.containsKey('email') ? data['email'] ?? '' : '',
       phoneNumber:
           data.containsKey('phoneNumber') ? data['phoneNumber'] ?? '' : '',
@@ -117,20 +121,11 @@ class UserModel {
           data.containsKey('profilePicture')
               ? data['profilePicture'] ?? ''
               : '',
-      role:
-          data.containsKey('role')
-              ? (data['role'] ?? AppRole.user) == AppRole.admin.name.toString()
-                  ? AppRole.admin
-                  : AppRole.user
-              : AppRole.user,
-      createdAt:
-          data.containsKey('createdAt')
-              ? data['createdAt']?.toDate() ?? DateTime.now()
-              : DateTime.now(),
-      updatedAt:
-          data.containsKey('updatedAt')
-              ? data['updatedAt']?.toDate() ?? DateTime.now()
-              : DateTime.now(),
+      role: _mapRoleStringToEnum(
+        data['role'] ?? data['userRole'] ?? AppRole.user.name,
+      ),
+      createdAt: _parseDate(data['createdAt']),
+      updatedAt: _parseDate(data['updatedAt']),
       deviceToken:
           data.containsKey('deviceToken') ? data['deviceToken'] ?? '' : '',
       isEmailVerified:
@@ -141,16 +136,33 @@ class UserModel {
           data.containsKey('isProfileActive')
               ? data['isProfileActive'] ?? false
               : false,
-      verificationStatus:
-          data.containsKey('verificationStatus')
-              ? _mapVerificationStringToEnum(data['verificationStatus'] ?? '')
+      verificationStatus: (data.containsKey('verificationStatus'))
+          ? _mapVerificationStringToEnum(data['verificationStatus'] ?? '')
+          : (data.containsKey('approvalStatus'))
+              ? _mapVerificationStringToEnum(data['approvalStatus'] ?? '')
               : VerificationStatus.pending,
     );
   }
 
-  // Utility to map a role string to the Roles enum
+  /// Utility to map a role string to the AppRole enum
+  static AppRole _mapRoleStringToEnum(dynamic role) {
+    if (role == null) return AppRole.user;
+    final r = role.toString().toLowerCase().trim();
+    if (r == 'admin' || r == 'administrator') return AppRole.admin;
+    return AppRole.user;
+  }
+
+  /// Utility to parse date from dynamic data (Firebase Timestamp or ISO String)
+  static DateTime? _parseDate(dynamic date) {
+    if (date == null) return null;
+    if (date is Timestamp) return date.toDate();
+    if (date is String) return DateTime.tryParse(date);
+    return null;
+  }
+
+  /// Utility to map a status string to the VerificationStatus enum
   static VerificationStatus _mapVerificationStringToEnum(String verification) {
-    switch (verification) {
+    switch (verification.trim().toLowerCase()) {
       case 'pending':
         return VerificationStatus.pending;
       case 'approved':
@@ -159,7 +171,7 @@ class UserModel {
         return VerificationStatus.rejected;
       case 'submitted':
         return VerificationStatus.submitted;
-      case 'underReview':
+      case 'underreview':
         return VerificationStatus.underReview;
       default:
         return VerificationStatus.unknown;

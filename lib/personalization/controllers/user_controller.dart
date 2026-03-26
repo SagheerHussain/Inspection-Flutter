@@ -4,7 +4,6 @@ import '../../utils/popups/exports.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../common/widgets/loaders/circular_loader.dart';
@@ -374,13 +373,9 @@ class UserController extends GetxController {
   }
 
   void assignDataToProfile() {
-    final localStorage = GetStorage();
-    username.text = localStorage.read('REMEMBER_ME_USERNAME') ?? '';
+    username.text = user.value.userName;
     fullName.text = user.value.fullName;
     email.text = user.value.email;
-    phoneNo.text =
-        user.value.phoneNumber.isNotEmpty
-            ? user.value.phoneNumber
-            : (localStorage.read('REMEMBER_ME_PHONE') ?? '');
+    phoneNo.text = user.value.phoneNumber;
   }
 }
