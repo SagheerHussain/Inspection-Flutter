@@ -1,8 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:get_storage/get_storage.dart';
 
 import '../../../../data/services/api/api_service.dart';
 import '../../../../utils/constants/api_constants.dart';
@@ -36,12 +34,18 @@ class DashboardStatsController extends GetxController {
   final reScheduledCountdownDayLabel = ''.obs;
   final hasReScheduledCountdown = false.obs;
 
+  final runningCountdownText = ''.obs;
+  final runningCountdownDayLabel = ''.obs;
+  final hasRunningCountdown = false.obs;
+
   final isScheduledExpired = false.obs;
   final isReScheduledExpired = false.obs;
+  final isRunningExpired = false.obs;
 
   Timer? _countdownTimer;
   DateTime? _nextScheduledTime; // Combined for main banner
   DateTime? _nextReScheduledTime; // Specific for quick link
+  DateTime? _nextRunningTime; // For running banner
 
   @override
   void onInit() {
@@ -60,72 +64,57 @@ class DashboardStatsController extends GetxController {
       isLoading.value = true;
       final userEmail = UserController.instance.user.value.email;
 
-      // Use constants from InspectionStatuses
-      final statuses = [
-        InspectionStatuses.scheduled,
-        InspectionStatuses.running,
-        InspectionStatuses.reScheduled,
-        InspectionStatuses.reInspection,
-        'Reinspection', // Variant 1
-        'Re-Inspected', // Variant 2 (from user database)
-        'Reinspected', // Variant 3
-        'Rescheduled', // Fallback for variant naming
-        InspectionStatuses.inspected,
-        InspectionStatuses.cancel,
+      // Core statuses to fetch
+      final fetchStatuses = [
+        'Scheduled',
+        'Running',
+        'Re-Scheduled',
+        'Re-Inspection',
+        'Inspected',
+        'Cancelled',
       ];
 
-      final Map<String, List<ScheduleModel>> results = {};
+      final Map<String, int> totals = {};
+      final Map<String, List<ScheduleModel>> sampleRecords = {};
 
-      // Fetch all statuses in parallel
+      // Fetch page 1 (limit=10) for each status — use 'total' for counts
       await Future.wait(
-        statuses.map((status) async {
+        fetchStatuses.map((status) async {
           try {
             final response = await ApiService.post(
-              ApiConstants.inspectionEngineerSchedulesUrl,
-              {
-                "inspectionStatus": status,
-                  "allocatedTo": userEmail,
-              },
+              ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
+                limit: 20,
+                pageNumber: 1,
+              ),
+              {"inspectionStatus": status, "allocatedTo": userEmail},
             );
+
+            // Use the 'total' field from API response for accurate count
+            totals[status] = response['total'] ?? 0;
+
+            // Keep page 1 data for countdown timer logic
             final List<dynamic> dataList = response['data'] ?? [];
-            results[status] =
+            sampleRecords[status] =
                 dataList.map((json) => ScheduleModel.fromJson(json)).toList();
           } catch (e) {
-            // debugPrint('❌ Error fetching $status: $e');
-            results[status] = [];
+            totals[status] = 0;
+            sampleRecords[status] = [];
           }
         }),
       );
 
-      // Combine all records for general use (like finding next inspection)
+      // Combine sample records for countdown timer
       final List<ScheduleModel> combined = [];
-      results.values.forEach((list) => combined.addAll(list));
-
+      sampleRecords.values.forEach((list) => combined.addAll(list));
       allRecords.assignAll(combined);
 
-      // Build a local map for robust counting
-      final Map<String, int> counts = {};
-      for (var status in statuses) {
-        var normalizedStatus = status.toLowerCase().replaceAll('-', '');
-
-        // Map 'reinspected' variants to 'reinspection' key so they appear in the same card
-        if (normalizedStatus == 'reinspected')
-          normalizedStatus = 'reinspection';
-        if (normalizedStatus == 'rescheduled')
-          normalizedStatus = 'rescheduled'; // ensures consistency
-
-        // Sum up counts for variants
-        counts[normalizedStatus] =
-            (counts[normalizedStatus] ?? 0) + (results[status]?.length ?? 0);
-      }
-
-      // Update individual counts (1:1 mapping as requested)
-      scheduledCount.value = counts['scheduled'] ?? 0;
-      runningCount.value = counts['running'] ?? 0;
-      reScheduledCount.value = counts['rescheduled'] ?? 0;
-      reInspectionCount.value = counts['reinspection'] ?? 0;
-      inspectedCount.value = counts['inspected'] ?? 0;
-      canceledCount.value = counts['cancel'] ?? 0;
+      // Set dashboard card counts from API 'total' field
+      scheduledCount.value = totals['Scheduled'] ?? 0;
+      runningCount.value = totals['Running'] ?? 0;
+      inspectedCount.value = totals['Inspected'] ?? 0;
+      canceledCount.value = totals['Cancelled'] ?? 0;
+      reScheduledCount.value = totals['Re-Scheduled'] ?? 0;
+      reInspectionCount.value = totals['Re-Inspection'] ?? 0;
 
       _startCountdown();
     } catch (e) {
@@ -159,6 +148,7 @@ class DashboardStatsController extends GetxController {
     final now = DateTime.now();
     DateTime? nextSched;
     DateTime? nextReSched;
+    DateTime? nextRunning;
 
     // We only consider "Scheduled" for the main "Schedules" banner countdown
     final mainUpcomingStatuses = [InspectionStatuses.scheduled];
@@ -180,15 +170,25 @@ class DashboardStatsController extends GetxController {
           nextReSched = dt;
         }
       }
+
+      // 3. Check for Running banner
+      if (record.inspectionStatus == InspectionStatuses.running) {
+        if (nextRunning == null || _isMoreUrgent(dt, nextRunning, now)) {
+          nextRunning = dt;
+        }
+      }
     }
 
     _nextScheduledTime = nextSched;
     _nextReScheduledTime = nextReSched;
+    _nextRunningTime = nextRunning;
 
     hasScheduledCountdown.value =
         scheduledCount.value > 0 && _nextScheduledTime != null;
     hasReScheduledCountdown.value =
         reScheduledCount.value > 0 && _nextReScheduledTime != null;
+    hasRunningCountdown.value =
+        runningCount.value > 0 && _nextRunningTime != null;
   }
 
   /// Helper to decide which date is "more urgent"
@@ -237,6 +237,19 @@ class DashboardStatsController extends GetxController {
       reScheduledCountdownDayLabel.value = _getDayLabel(_nextReScheduledTime!);
     } else {
       reScheduledCountdownText.value = '';
+    }
+
+    // Update Running Banner
+    if (_nextRunningTime != null) {
+      final diff = _nextRunningTime!.difference(now);
+      final isOverdue = diff.isNegative;
+
+      isRunningExpired.value = isOverdue || diff.inSeconds <= 3600;
+      runningCountdownText.value =
+          isOverdue ? 'OVERDUE' : _formatDuration(diff);
+      runningCountdownDayLabel.value = _getDayLabel(_nextRunningTime!);
+    } else {
+      runningCountdownText.value = '';
     }
   }
 

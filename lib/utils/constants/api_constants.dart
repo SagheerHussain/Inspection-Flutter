@@ -5,7 +5,7 @@ class ApiConstants {
   ApiConstants._();
 
   static const String _prodBaseUrl =
-      'https://otobix-app-backend-development.onrender.com/api/';
+      'https://ob-dealerapp-kong.onrender.com/api/';
 
   static final _storage = GetStorage();
   static const String _envKey = 'API_ENVIRONMENT';
@@ -50,6 +50,13 @@ class ApiConstants {
   // ──────────────────────────────────────────
   static String get inspectionEngineerSchedulesUrl =>
       '${baseUrl}inspection/telecallings/get-list-by-inspection-engineer';
+
+  /// Paginated telecalling endpoint with limit & pageNumber query params
+  static String inspectionEngineerSchedulesPaginatedUrl({
+    int limit = 20,
+    int pageNumber = 1,
+  }) =>
+      '${baseUrl}inspection/telecallings/get-list-by-inspection-engineer?limit=$limit&pageNumber=$pageNumber';
 
   static String get updateTelecallingUrl =>
       '${baseUrl}inspection/telecallings/update';

@@ -65,10 +65,7 @@ class LoginController extends GetxController {
       // 1. Authenticate using Custom CRM API
       final Map<String, dynamic> response = await ApiService.post(
         ApiConstants.loginUrl,
-        {
-          'userName': userName.text.trim(),
-          'password': password.text.trim(),
-        },
+        {'userName': userName.text.trim(), 'password': password.text.trim()},
       );
 
       // Check if response contains user data
@@ -85,7 +82,8 @@ class LoginController extends GetxController {
         TFullScreenLoader.stopLoading();
         TLoaders.warningSnackBar(
           title: 'Account Not Approved',
-          message: 'Your account is currently ${user.verificationStatus.name}. Please contact support.',
+          message:
+              'Your account is currently ${user.verificationStatus.name}. Please contact support.',
         );
         return;
       }
@@ -93,7 +91,7 @@ class LoginController extends GetxController {
       // 4. Persistence - Save user IDs and roles for the rest of the app
       final userController = Get.put(UserController());
       userController.user.value = user;
-      
+
       final String storedUserId = user.id;
       localStorage.write('USER_ID', storedUserId);
       localStorage.write('user_id', storedUserId);

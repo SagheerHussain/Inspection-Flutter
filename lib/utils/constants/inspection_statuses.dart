@@ -4,7 +4,7 @@ class InspectionStatuses {
   static const String running = 'Running';
   static const String reScheduled = 'Re-Scheduled';
   static const String scheduled = 'Scheduled';
-  static const String cancel = 'Cancel';
+  static const String cancel = 'Cancelled';
   static const String inspected = 'Inspected';
   static const String reInspection = 'Re-Inspection';
 

@@ -61,14 +61,17 @@ class ApiService {
   ) async {
     try {
       // ── Ultra-Robust Failsafe: Inject userId if missing or empty ──
-      if (body.containsKey('userId') && (body['userId']?.toString().isEmpty ?? true)) {
+      if (body.containsKey('userId') &&
+          (body['userId']?.toString().isEmpty ?? true)) {
         final storage = GetStorage();
         String fallbackId = storage.read('USER_ID')?.toString() ?? '';
-        
+
         // Try other common keys if USER_ID is empty
         if (fallbackId.isEmpty) {
-          fallbackId = storage.read('user_id')?.toString() ?? 
-                       storage.read('uid')?.toString() ?? '';
+          fallbackId =
+              storage.read('user_id')?.toString() ??
+              storage.read('uid')?.toString() ??
+              '';
         }
 
         if (fallbackId.isNotEmpty) {
@@ -110,7 +113,10 @@ class ApiService {
     try {
       debugPrint('📡 GET: $url');
 
-      final response = await http.get(Uri.parse(url), headers: _headersForUrl(url));
+      final response = await http.get(
+        Uri.parse(url),
+        headers: _headersForUrl(url),
+      );
 
       debugPrint('📬 Status: ${response.statusCode}');
 

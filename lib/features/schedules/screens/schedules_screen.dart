@@ -50,7 +50,7 @@ class SchedulesScreen extends StatelessWidget {
             ),
             Obx(
               () => Text(
-                '${controller.schedules.length} ${controller.screenSubtitle}',
+                '${controller.totalRecords.value} ${controller.screenSubtitle}',
                 style: Theme.of(
                   context,
                 ).textTheme.bodySmall?.copyWith(color: Colors.grey),

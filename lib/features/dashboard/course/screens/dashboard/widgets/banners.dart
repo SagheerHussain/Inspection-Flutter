@@ -24,194 +24,48 @@ class DashboardBanners extends StatelessWidget {
         children: [
           // 1st Banner: Schedules
           Expanded(
-            child: GestureDetector(
+            child: _BannerCard(
+              title: "Schedules",
+              count: stats.scheduledCount,
+              hasCountdown: stats.hasScheduledCountdown,
+              countdownText: stats.scheduledCountdownText,
+              dayLabel: stats.scheduledCountdownDayLabel,
+              isExpired: stats.isScheduledExpired,
+              icon: Icons.calendar_month_rounded,
+              baseColor: const Color(0xFF4A90D9),
+              darkColors: [const Color(0xFF0D1B2E), const Color(0xFF162D4A)],
+              lightColors: [const Color(0xFFD6E8FA), const Color(0xFFB8D4F0)],
+              dark: dark,
               onTap: () {
                 if (Get.isRegistered<DashboardSearchController>()) {
                   Get.find<DashboardSearchController>().clearSearch();
                 }
                 Get.to(() => const SchedulesScreen(statusFilter: 'Upcoming'));
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors:
-                        dark
-                            ? [const Color(0xFF0D1B2E), const Color(0xFF162D4A)]
-                            : [
-                              const Color(0xFFD6E8FA),
-                              const Color(0xFFB8D4F0),
-                            ],
-                  ),
-                  boxShadow: [],
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ── Top Row: Countdown (left) + Icon (right) ──
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        // Countdown Timer Label
-                        Expanded(
-                          child: Obx(() {
-                            if (!stats.hasScheduledCountdown.value) {
-                              return const SizedBox.shrink();
-                            }
-                            return _BannerTimer(
-                              time: stats.scheduledCountdownText.value,
-                              dayLabel: stats.scheduledCountdownDayLabel.value,
-                              isExpired: stats.isScheduledExpired.value,
-                              dark: dark,
-                            );
-                          }),
-                        ),
-                        const SizedBox(width: 8),
-                        // Icon
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF4A90D9,
-                            ).withValues(alpha: 0.25),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.calendar_month_rounded,
-                            color: Color(0xFF4A90D9),
-                            size: 30,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-
-                    // Center: Animated Counter
-                    Center(
-                      child: Obx(
-                        () => _AnimatedCounter(
-                          value: stats.scheduledCount.value,
-                          style:
-                              txtTheme.displayLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 48,
-                                height: 1.0,
-                                color: const Color(0xFF4A90D9),
-                              ) ??
-                              const TextStyle(
-                                fontSize: 48,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFF4A90D9),
-                              ),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-
-                    // Bottom: Title
-                    Text(
-                      "Schedules",
-                      style: txtTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
-          const SizedBox(width: 10),
+          const SizedBox(width: 12),
 
           // 2nd Banner: Running
           Expanded(
-            child: GestureDetector(
+            child: _BannerCard(
+              title: "Running",
+              count: stats.runningCount,
+              hasCountdown: stats.hasRunningCountdown,
+              countdownText: stats.runningCountdownText,
+              dayLabel: stats.runningCountdownDayLabel,
+              isExpired: stats.isRunningExpired,
+              icon: Icons.bolt_rounded,
+              baseColor: const Color(0xFFFF7043),
+              darkColors: [const Color(0xFF2C150D), const Color(0xFF3B1E13)],
+              lightColors: [const Color(0xFFFBE9E7), const Color(0xFFFFCCBC)],
+              dark: dark,
               onTap: () {
                 if (Get.isRegistered<DashboardSearchController>()) {
                   Get.find<DashboardSearchController>().clearSearch();
                 }
-                Get.to(
-                  () => const SchedulesScreen(
-                    statusFilter: InspectionStatuses.running,
-                  ),
-                );
+                Get.to(() => SchedulesScreen(statusFilter: InspectionStatuses.running));
               },
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors:
-                        dark
-                            ? [const Color(0xFF2A1510), const Color(0xFF3D2218)]
-                            : [
-                              const Color(0xFFFFE0CC),
-                              const Color(0xFFFFCDB2),
-                            ],
-                  ),
-                  boxShadow: [],
-                ),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Top Row: Icon (Top Right)
-                    Align(
-                      alignment: Alignment.topRight,
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(
-                            0xFFFF6B35,
-                          ).withValues(alpha: 0.25),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.play_circle_filled_rounded,
-                          color: Color(0xFFFF6B35),
-                          size: 30,
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-
-                    // Center: Animated Counter
-                    Center(
-                      child: Obx(
-                        () => _AnimatedCounter(
-                          value: stats.runningCount.value,
-                          style:
-                              txtTheme.displayLarge?.copyWith(
-                                fontWeight: FontWeight.w900,
-                                fontSize: 48,
-                                height: 1.0,
-                                color: const Color(0xFFFF6B35),
-                              ) ??
-                              const TextStyle(
-                                fontSize: 48,
-                                fontWeight: FontWeight.w900,
-                                color: Color(0xFFFF6B35),
-                              ),
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-
-                    // Bottom: Title
-                    Text(
-                      "Running",
-                      style: txtTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ),
           ),
         ],
@@ -220,151 +74,141 @@ class DashboardBanners extends StatelessWidget {
   }
 }
 
-class _BannerTimer extends StatelessWidget {
-  final String time;
-  final String dayLabel;
-  final bool isExpired;
+class _BannerCard extends StatelessWidget {
+  final String title;
+  final RxInt count;
+  final RxBool hasCountdown;
+  final RxString countdownText;
+  final RxString dayLabel;
+  final RxBool isExpired;
+  final IconData icon;
+  final Color baseColor;
+  final List<Color> darkColors;
+  final List<Color> lightColors;
   final bool dark;
+  final VoidCallback onTap;
 
-  const _BannerTimer({
-    required this.time,
+  const _BannerCard({
+    required this.title,
+    required this.count,
+    required this.hasCountdown,
+    required this.countdownText,
     required this.dayLabel,
     required this.isExpired,
+    required this.icon,
+    required this.baseColor,
+    required this.darkColors,
+    required this.lightColors,
     required this.dark,
+    required this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Day Label (e.g., TODAY, TOMORROW)
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          margin: const EdgeInsets.only(bottom: 4),
-          decoration: BoxDecoration(
-            color:
-                dark
-                    ? Colors.white.withValues(alpha: 0.1)
-                    : Colors.black.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(6),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: dark ? darkColors : lightColors,
           ),
-          child: Text(
-            dayLabel.toUpperCase(),
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 7,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.5,
+          boxShadow: [
+            BoxShadow(
+              color: baseColor.withValues(alpha: dark ? 0.1 : 0.2),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
-          ),
+          ],
         ),
-
-        // "Next Inspection in" Label
-        Padding(
-          padding: const EdgeInsets.only(left: 2, bottom: 4),
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              time == 'OVERDUE' ? "Inspection" : "Next Inspection in",
-              style: TextStyle(
-                color: dark ? Colors.white70 : Colors.black87,
-                fontSize: 9,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ),
-        ),
-
-        // Timer Box
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-            decoration: BoxDecoration(
-              color:
-                  isExpired
-                      ? Colors.red.withValues(alpha: 0.9)
-                      : (dark
-                          ? Colors.white.withValues(alpha: 0.08)
-                          : Colors.black.withValues(alpha: 0.4)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          children: [
+            // Header Row: Title + Icon
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                if (isExpired)
-                  const _PulseDot()
-                else
-                  const Icon(
-                    Icons.access_time_rounded,
-                    size: 10,
-                    color: Colors.white,
-                  ),
-                const SizedBox(width: 4),
                 Text(
-                  time,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    fontFeatures: [FontFeature.tabularFigures()],
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: dark ? Colors.white70 : baseColor.withValues(alpha: 0.8),
+                    letterSpacing: 0.5,
                   ),
+                ),
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: baseColor.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(icon, color: baseColor, size: 18),
                 ),
               ],
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
+            
+            const SizedBox(height: 8),
 
-class _PulseDot extends StatefulWidget {
-  const _PulseDot();
+            // Countdown Area (Middle-top)
+            Obx(() {
+              if (!hasCountdown.value) return const SizedBox(height: 28);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isExpired.value 
+                    ? Colors.red.withValues(alpha: 0.1) 
+                    : baseColor.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        dayLabel.value.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.w900,
+                          color: isExpired.value ? Colors.red : (dark ? Colors.white54 : Colors.black54),
+                        ),
+                      ),
+                    ),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        countdownText.value,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: isExpired.value ? Colors.red : (dark ? Colors.white : Colors.black87),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
 
-  @override
-  State<_PulseDot> createState() => _PulseDotState();
-}
+            const Spacer(),
 
-class _PulseDotState extends State<_PulseDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _animation = Tween<double>(
-      begin: 0.4,
-      end: 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInOut));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _animation,
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(color: Colors.red, blurRadius: 4, spreadRadius: 1),
+            // Large Hero Counter
+            Obx(() => FittedBox(
+              fit: BoxFit.scaleDown,
+              child: _AnimatedCounter(
+                value: count.value,
+                style: TextStyle(
+                  fontSize: 44,
+                  fontWeight: FontWeight.w900,
+                  height: 1.0,
+                  color: dark ? Colors.white : const Color(0xFF1E293B),
+                ),
+              ),
+            )),
+            
+            const Spacer(),
           ],
         ),
       ),
@@ -372,7 +216,6 @@ class _PulseDotState extends State<_PulseDot>
   }
 }
 
-/// Animated counter that counts up from 0 to the target value
 class _AnimatedCounter extends StatefulWidget {
   final int value;
   final TextStyle style;
@@ -387,35 +230,34 @@ class _AnimatedCounterState extends State<_AnimatedCounter>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _animation;
-  int _previousValue = 0;
 
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(
+      duration: const Duration(seconds: 1),
       vsync: this,
-      duration: const Duration(milliseconds: 2000),
     );
     _animation = Tween<double>(
       begin: 0,
       end: widget.value.toDouble(),
-    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutExpo));
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutQuart));
     _controller.forward();
   }
 
   @override
   void didUpdateWidget(covariant _AnimatedCounter oldWidget) {
-    super.didUpdateWidget(oldWidget);
     if (oldWidget.value != widget.value) {
-      _previousValue = oldWidget.value;
       _animation = Tween<double>(
-        begin: _previousValue.toDouble(),
+        begin: oldWidget.value.toDouble(),
         end: widget.value.toDouble(),
       ).animate(
-        CurvedAnimation(parent: _controller, curve: Curves.easeOutExpo),
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutQuart),
       );
-      _controller.forward(from: 0);
+      _controller.reset();
+      _controller.forward();
     }
+    super.didUpdateWidget(oldWidget);
   }
 
   @override
@@ -429,7 +271,7 @@ class _AnimatedCounterState extends State<_AnimatedCounter>
     return AnimatedBuilder(
       animation: _animation,
       builder: (context, child) {
-        return Text('${_animation.value.toInt()}', style: widget.style);
+        return Text(_animation.value.toInt().toString(), style: widget.style);
       },
     );
   }

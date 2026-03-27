@@ -24,30 +24,27 @@ class ScheduleController extends GetxController {
   final schedules = <ScheduleModel>[].obs;
   final isLoading = false.obs;
   final isLoadingMore = false.obs;
-  final currentPage =
-      1.obs; // Kept for compatibility, though pagination is now local
   final hasMoreData = true.obs;
-  final int pageLimit = 10; // Increased limit for better UX
+  final totalRecords = 0.obs; // Total from API response
+  final int pageLimit = 20;
 
-  // Local pagination storage
-  List<ScheduleModel> _allFilteredRecords = [];
-  int _currentIndex = 0;
+  int _currentPage = 1;
 
   /// Update a specific schedule across all controller instances (tags).
-  /// This ensures that changes made in the form (like make/model) are
-  /// immediately reflected in the list cards.
   static void updateScheduleGlobally(
     String appointmentId, {
     String? make,
     String? model,
     String? variant,
   }) {
-    // List of common tags that might exist in the app
     final tags = [
       'schedule_Running',
       'schedule_Scheduled',
       'schedule_Re-Inspection',
       'schedule_Re-Scheduled',
+      'schedule_Inspected',
+      'schedule_Cancelled',
+      'schedule_Upcoming',
       'search_results',
     ];
 
@@ -66,14 +63,6 @@ class ScheduleController extends GetxController {
           );
           controller.schedules[index] = updated;
           controller.schedules.refresh();
-
-          // Also update the hidden full records list so pagination doesn't revert it
-          final fullIndex = controller._allFilteredRecords.indexWhere(
-            (s) => s.appointmentId == appointmentId,
-          );
-          if (fullIndex != -1) {
-            controller._allFilteredRecords[fullIndex] = updated;
-          }
         }
       }
     }
@@ -85,197 +74,49 @@ class ScheduleController extends GetxController {
     super.onInit();
   }
 
-  /// Fetch all schedules from API (one huge batch), filter locally,
-  /// then paginate the display locally via loadMore.
+  /// Fetch schedules with server-side pagination.
+  /// On initial load: fetches page 1.
+  /// On loadMore: fetches the next page.
   Future<void> fetchSchedules({bool loadMore = false}) async {
     try {
-      // LOCAL PAGINATION (Load More)
+      // ── LOAD MORE (next page) ──
       if (loadMore) {
         if (!hasMoreData.value || isLoadingMore.value) return;
         isLoadingMore.value = true;
+        _currentPage++;
 
-        // Simulate a tiny delay for UX (optional) or just load instantly
-        // Picking next batch from local list
-        final nextBatch =
-            _allFilteredRecords.skip(_currentIndex).take(pageLimit).toList();
+        final userEmail = UserController.instance.user.value.email;
 
-        if (nextBatch.isNotEmpty) {
-          schedules.addAll(nextBatch);
-          _currentIndex += nextBatch.length;
-        }
-
-        if (_currentIndex >= _allFilteredRecords.length) {
-          hasMoreData.value = false;
+        if (searchQuery.isNotEmpty) {
+          // Search mode: fetch next page for all statuses and merge
+          await _fetchSearchPage(userEmail);
+        } else if (statusFilter == 'Upcoming') {
+          await _fetchPageForStatus('Scheduled', userEmail);
+        } else {
+          await _fetchPageForStatus(statusFilter, userEmail);
         }
 
         isLoadingMore.value = false;
         return;
       }
 
-      // INITIAL LOAD: Fetch All from Server
+      // ── INITIAL LOAD (page 1) ──
       isLoading.value = true;
       schedules.clear();
-      _allFilteredRecords.clear();
-      _currentIndex = 0;
+      _currentPage = 1;
       hasMoreData.value = true;
+      totalRecords.value = 0;
 
-      // Retrieve stored user email
       final userEmail = UserController.instance.user.value.email;
 
-      List<ScheduleModel> allCombinedRecords = [];
-
       if (searchQuery.isNotEmpty) {
-        // SEARCH MODE: Fetch all statuses to search across assigned data
-        final statuses = [
-          InspectionStatuses.scheduled,
-          InspectionStatuses.running,
-          InspectionStatuses.reScheduled,
-          InspectionStatuses.reInspection,
-          InspectionStatuses.inspected,
-          InspectionStatuses.cancel,
-        ];
-
-        await Future.wait(
-          statuses.map((status) async {
-            try {
-              final response = await ApiService.post(
-                ApiConstants.inspectionEngineerSchedulesUrl,
-                {
-                  "inspectionStatus": status,
-                  "allocatedTo": userEmail,
-                },
-              );
-              final List<dynamic> dataList = response['data'] ?? [];
-              allCombinedRecords.addAll(
-                dataList.map((json) => ScheduleModel.fromJson(json)),
-              );
-            } catch (e) {
-              // debugPrint('❌ Search fetch error for $status: $e');
-            }
-          }),
-        );
-
-        final query = searchQuery.toLowerCase();
-        _allFilteredRecords =
-            allCombinedRecords.where((record) {
-              final idMatch = record.appointmentId
-                  .toString()
-                  .toLowerCase()
-                  .contains(query);
-              final phoneMatch = record.customerContactNumber
-                  .toString()
-                  .toLowerCase()
-                  .contains(query);
-              final ownerMatch = record.ownerName
-                  .toString()
-                  .toLowerCase()
-                  .contains(query);
-              return idMatch || phoneMatch || ownerMatch;
-            }).toList();
+        await _fetchSearchPage(userEmail);
       } else if (statusFilter == 'Upcoming') {
-        // UPCOMING MODE: Fetch strictly Scheduled status
-        final upcomingStatuses = [InspectionStatuses.scheduled];
-
-        await Future.wait(
-          upcomingStatuses.map((status) async {
-            try {
-              final response = await ApiService.post(
-                ApiConstants.inspectionEngineerSchedulesUrl,
-                {
-                  "inspectionStatus": status,
-                  "allocatedTo": userEmail,
-                },
-              );
-              final List<dynamic> dataList = response['data'] ?? [];
-              allCombinedRecords.addAll(
-                dataList.map((json) => ScheduleModel.fromJson(json)),
-              );
-            } catch (e) {
-              // debugPrint('❌ Upcoming fetch error for $status: $e');
-            }
-          }),
-        );
-
-        _allFilteredRecords =
-            allCombinedRecords.where((record) {
-              if (record.inspectionStatus.toLowerCase() == 'pending')
-                return false;
-              return true;
-            }).toList();
-
-        // Ensure they are sorted by date
-        _allFilteredRecords.sort((a, b) {
-          final aDt = a.inspectionDateTime ?? DateTime(2099);
-          final bDt = b.inspectionDateTime ?? DateTime(2099);
-          return aDt.compareTo(bDt);
-        });
+        await _fetchPageForStatus('Scheduled', userEmail);
       } else {
-        // STATUS MODE: Fetch single status (with fallback for Re- variants)
-        final List<String> statusVariants = [statusFilter];
-        if (statusFilter == InspectionStatuses.running) {
-          // Fetch strictly running status. Move logic handles displaying items appropriately.
-        } else if (statusFilter == InspectionStatuses.reInspection) {
-          statusVariants.add('Reinspection');
-          statusVariants.add('Re-Inspected');
-          statusVariants.add('Reinspected');
-        } else if (statusFilter == InspectionStatuses.reScheduled) {
-          statusVariants.add('Rescheduled');
-        }
-
-        await Future.wait(
-          statusVariants.map((status) async {
-            try {
-              final response = await ApiService.post(
-                ApiConstants.inspectionEngineerSchedulesUrl,
-                {
-                  "inspectionStatus": status,
-                  "allocatedTo": userEmail,
-                },
-              );
-              final List<dynamic> dataList = response['data'] ?? [];
-              allCombinedRecords.addAll(
-                dataList.map((json) => ScheduleModel.fromJson(json)),
-              );
-            } catch (e) {
-              // debugPrint('❌ Status fetch error for $status: $e');
-            }
-          }),
-        );
-
-        _allFilteredRecords =
-            allCombinedRecords.where((record) {
-              // Exclude 'Pending' unless specific requirement
-              if (record.inspectionStatus.toLowerCase() == 'pending')
-                return false;
-
-              // Robust matching: compare normalized strings (lowercase, no hyphens)
-              var normalizedRecordStatus = record.inspectionStatus
-                  .toLowerCase()
-                  .replaceAll('-', '');
-              var normalizedFilterStatus = statusFilter
-                  .toLowerCase()
-                  .replaceAll('-', '');
-
-              // Unified mapping for Re-Inspection variants
-              if (normalizedRecordStatus == 'reinspected')
-                normalizedRecordStatus = 'reinspection';
-              if (normalizedFilterStatus == 'reinspected')
-                normalizedFilterStatus = 'reinspection';
-
-              return normalizedRecordStatus == normalizedFilterStatus;
-            }).toList();
-      }
-
-      // Initial Display Batch
-      final firstBatch = _allFilteredRecords.take(pageLimit).toList();
-      schedules.assignAll(firstBatch);
-      _currentIndex = firstBatch.length;
-
-      if (_currentIndex >= _allFilteredRecords.length) {
-        hasMoreData.value = false;
+        await _fetchPageForStatus(statusFilter, userEmail);
       }
     } catch (e) {
-      // debugPrint('❌ Error fetching schedules: $e');
       if (!loadMore) {
         Get.snackbar(
           'Error',
@@ -288,6 +129,93 @@ class ScheduleController extends GetxController {
     } finally {
       isLoading.value = false;
       isLoadingMore.value = false;
+    }
+  }
+
+  /// Fetch a single page for a given status and append results.
+  Future<void> _fetchPageForStatus(String status, String userEmail) async {
+    try {
+      final response = await ApiService.post(
+        ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
+          limit: pageLimit,
+          pageNumber: _currentPage,
+        ),
+        {
+          "inspectionStatus": status,
+          "allocatedTo": userEmail,
+        },
+      );
+
+      // Use 'total' from API response
+      final apiTotal = response['total'] ?? 0;
+      totalRecords.value = apiTotal;
+
+      final List<dynamic> dataList = response['data'] ?? [];
+      final newRecords =
+          dataList.map((json) => ScheduleModel.fromJson(json)).toList();
+
+      schedules.addAll(newRecords);
+
+      // Check if we've loaded all records
+      if (schedules.length >= apiTotal || newRecords.isEmpty) {
+        hasMoreData.value = false;
+      }
+    } catch (e) {
+      hasMoreData.value = false;
+    }
+  }
+
+  /// Search mode: fetch page for ALL statuses and filter by query.
+  Future<void> _fetchSearchPage(String userEmail) async {
+    final statuses = InspectionStatuses.all;
+    int maxTotal = 0;
+
+    final List<ScheduleModel> pageResults = [];
+
+    await Future.wait(
+      statuses.map((status) async {
+        try {
+          final response = await ApiService.post(
+            ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
+              limit: pageLimit,
+              pageNumber: _currentPage,
+            ),
+            {
+              "inspectionStatus": status,
+              "allocatedTo": userEmail,
+            },
+          );
+
+          final apiTotal = response['total'] ?? 0;
+          maxTotal += apiTotal as int;
+
+          final List<dynamic> dataList = response['data'] ?? [];
+          pageResults.addAll(
+            dataList.map((json) => ScheduleModel.fromJson(json)),
+          );
+        } catch (_) {}
+      }),
+    );
+
+    totalRecords.value = maxTotal;
+
+    // Apply search filter
+    final query = searchQuery.toLowerCase();
+    final filtered = pageResults.where((record) {
+      final idMatch =
+          record.appointmentId.toLowerCase().contains(query);
+      final phoneMatch =
+          record.customerContactNumber.toLowerCase().contains(query);
+      final ownerMatch =
+          record.ownerName.toLowerCase().contains(query);
+      return idMatch || phoneMatch || ownerMatch;
+    }).toList();
+
+    schedules.addAll(filtered);
+
+    // For search, stop paginating if no new results came back
+    if (pageResults.isEmpty) {
+      hasMoreData.value = false;
     }
   }
 
@@ -306,8 +234,9 @@ class ScheduleController extends GetxController {
     if (statusFilter == InspectionStatuses.running)
       return 'Running Inspections';
     if (statusFilter == InspectionStatuses.reInspection) return 'Re-Inspection';
+    if (statusFilter == InspectionStatuses.reScheduled) return 'Re-Scheduled';
     if (statusFilter == InspectionStatuses.inspected) return 'Inspected';
-    if (statusFilter == InspectionStatuses.cancel) return 'Canceled';
+    if (statusFilter == InspectionStatuses.cancel) return 'Cancelled';
     return 'Records';
   }
 
@@ -322,7 +251,7 @@ class ScheduleController extends GetxController {
       return 're-inspection records';
     if (statusFilter == InspectionStatuses.inspected)
       return 'completed inspections';
-    if (statusFilter == InspectionStatuses.cancel) return 'canceled records';
+    if (statusFilter == InspectionStatuses.cancel) return 'cancelled records';
     return 'records';
   }
 
@@ -355,11 +284,9 @@ class ScheduleController extends GetxController {
       // Update local item status for instant UI feedback
       final index = schedules.indexWhere((s) => s.id == telecallingId);
       if (index != -1) {
-        // We'd ideally fetch the updated record or update the model locally
-        // For now, let's refresh the whole list to be safe and accurate
         await refreshSchedules();
 
-        // Also refresh dashboard stats so the countdown timer updates immediately
+        // Also refresh dashboard stats
         if (Get.isRegistered<DashboardStatsController>()) {
           Get.find<DashboardStatsController>().refresh();
         }
@@ -370,7 +297,6 @@ class ScheduleController extends GetxController {
         message: 'Inspection status updated to $status',
       );
     } catch (e) {
-      // debugPrint('❌ Status Update Error: $e');
       TLoaders.errorSnackBar(title: 'Update Failed', message: e.toString());
       rethrow;
     }

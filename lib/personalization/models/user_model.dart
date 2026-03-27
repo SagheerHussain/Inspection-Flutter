@@ -121,7 +121,7 @@ class UserModel {
           data.containsKey('profilePicture')
               ? data['profilePicture'] ?? ''
               : '',
-      role: _mapRoleStringToEnum(
+      role: mapRoleStringToEnum(
         data['role'] ?? data['userRole'] ?? AppRole.user.name,
       ),
       createdAt: _parseDate(data['createdAt']),
@@ -136,16 +136,50 @@ class UserModel {
           data.containsKey('isProfileActive')
               ? data['isProfileActive'] ?? false
               : false,
-      verificationStatus: (data.containsKey('verificationStatus'))
-          ? _mapVerificationStringToEnum(data['verificationStatus'] ?? '')
-          : (data.containsKey('approvalStatus'))
+      verificationStatus:
+          (data.containsKey('verificationStatus'))
+              ? _mapVerificationStringToEnum(data['verificationStatus'] ?? '')
+              : (data.containsKey('approvalStatus'))
               ? _mapVerificationStringToEnum(data['approvalStatus'] ?? '')
               : VerificationStatus.pending,
     );
   }
 
+  /// Create a copy of the model with updated fields
+  UserModel copyWith({
+    String? id,
+    String? fullName,
+    String? userName,
+    String? email,
+    String? phoneNumber,
+    String? profilePicture,
+    AppRole? role,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isProfileActive,
+    bool? isEmailVerified,
+    VerificationStatus? verificationStatus,
+    String? deviceToken,
+  }) {
+    return UserModel(
+      id: id ?? this.id,
+      fullName: fullName ?? this.fullName,
+      userName: userName ?? this.userName,
+      email: email ?? this.email,
+      phoneNumber: phoneNumber ?? this.phoneNumber,
+      profilePicture: profilePicture ?? this.profilePicture,
+      role: role ?? this.role,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isProfileActive: isProfileActive ?? this.isProfileActive,
+      isEmailVerified: isEmailVerified ?? this.isEmailVerified,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      deviceToken: deviceToken ?? this.deviceToken,
+    );
+  }
+
   /// Utility to map a role string to the AppRole enum
-  static AppRole _mapRoleStringToEnum(dynamic role) {
+  static AppRole mapRoleStringToEnum(dynamic role) {
     if (role == null) return AppRole.user;
     final r = role.toString().toLowerCase().trim();
     if (r == 'admin' || r == 'administrator') return AppRole.admin;

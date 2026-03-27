@@ -1,5 +1,6 @@
 import 'package:inspection_app/data/services/notifications/notification_sevice.dart';
 
+import 'package:get_storage/get_storage.dart';
 import '../../utils/popups/exports.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -50,27 +51,38 @@ class UserController extends GetxController {
   /// Fetch user record
   Future<void> fetchUserRecord({bool fetchLatestRecord = false}) async {
     try {
+      // ── Robust Local Sync: Try loading basic identifiers from GetStorage first ──
+      final storage = GetStorage();
+      final storedEmail = storage.read('USER_EMAIL')?.toString() ?? '';
+      final storedId = storage.read('USER_ID')?.toString() ?? '';
+      final storedPhone =
+          storage.read('INSPECTION_ENGINEER_NUMBER')?.toString() ?? '';
+      final storedRole = storage.read('USER_ROLE')?.toString() ?? '';
+
+      if (user.value.id.isEmpty && storedId.isNotEmpty) {
+        user.value = user.value.copyWith(
+          id: storedId,
+          email: storedEmail,
+          phoneNumber: storedPhone,
+          role: UserModel.mapRoleStringToEnum(storedRole),
+        );
+      }
+
       if (fetchLatestRecord) {
         profileLoading.value = true;
-        final user = await userRepository.fetchUserDetails();
-        this.user(user);
+        final latestUser = await userRepository.fetchUserDetails();
+        user(latestUser);
       } else {
-        // Check if user is logged in and has a valid ID
-        if (user.value.id != AuthenticationRepository.instance.getUserID) {
-          user.value = UserModel.empty();
-        }
-
-        // Fetch user data from the repository
-        if (user.value.id.isEmpty) {
+        // Fetch user data from the repository (Firestore)
+        // If it's a CRM-only user, this might fail, but we now have the local fallback from Storage
+        if (user.value.id.isNotEmpty) {
           profileLoading.value = true;
-          final user = await userRepository.fetchUserDetails();
-          this.user(user);
+          final latestUser = await userRepository.fetchUserDetails();
+          user(latestUser);
         }
       }
     } catch (e) {
-      // Silently handle — user info may not exist in Firebase
-      // when using Otobix backend login
-      debugPrint('ℹ️ User fetch skipped: $e');
+      // debugPrint('ℹ️ User fetch skipped (CRM-only user): $e');
     } finally {
       profileLoading.value = false;
     }

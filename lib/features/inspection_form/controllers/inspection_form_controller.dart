@@ -3171,7 +3171,10 @@ class InspectionFormController extends GetxController {
       for (final status in statuses) {
         try {
           final response = await ApiService.post(
-            ApiConstants.inspectionEngineerSchedulesUrl,
+            ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
+              limit: 100,
+              pageNumber: 1,
+            ),
             {
               "inspectionStatus": status,
               "allocatedTo": userEmail,
