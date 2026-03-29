@@ -13,7 +13,7 @@ import '../controllers/schedule_controller.dart';
 import '../models/schedule_model.dart';
 import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
 
-class SchedulesScreen extends StatelessWidget {
+class SchedulesScreen extends StatefulWidget {
   final String statusFilter;
   final String searchQuery;
 
@@ -24,14 +24,48 @@ class SchedulesScreen extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
-    // Use a unique tag so each status filter (or search) gets its own controller
+  State<SchedulesScreen> createState() => _SchedulesScreenState();
+}
+
+class _SchedulesScreenState extends State<SchedulesScreen> {
+  late TextEditingController _searchController;
+  late ScheduleController controller;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController(text: widget.searchQuery);
     final tag =
-        searchQuery.isNotEmpty ? 'search_results' : 'schedule_$statusFilter';
-    final controller = Get.put(
-      ScheduleController(statusFilter: statusFilter, searchQuery: searchQuery),
+        widget.searchQuery.isNotEmpty
+            ? 'search_results'
+            : 'schedule_${widget.statusFilter}';
+    controller = Get.put(
+      ScheduleController(
+        statusFilter: widget.statusFilter,
+        initialSearchQuery: widget.searchQuery,
+      ),
       tag: tag,
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      controller.searchQuery.value = query;
+      controller.fetchSchedules();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
 
     return Scaffold(
@@ -42,11 +76,13 @@ class SchedulesScreen extends StatelessWidget {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              controller.screenTitle,
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            Obx(
+              () => Text(
+                controller.screenTitle,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
             Obx(
               () => Text(
@@ -79,94 +115,138 @@ class SchedulesScreen extends StatelessWidget {
           ),
         ],
       ),
-      body: Obx(() {
-        if (controller.isLoading.value) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(color: TColors.primary),
-                SizedBox(height: 16),
-                Text(
-                  'Loading records...',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }
-
-        if (controller.schedules.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  _emptyIcon(statusFilter),
-                  size: 64,
-                  color: Colors.grey.withValues(alpha: 0.4),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'No ${controller.screenTitle.toLowerCase()} found',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+      body: Column(
+        children: [
+          // ── Search Bar ──
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            child: Container(
+              decoration: BoxDecoration(
+                color: dark ? TColors.secondary : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: TextField(
+                controller: _searchController,
+                onChanged: _onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search by Appointment ID or Name...',
+                  hintStyle: const TextStyle(color: Colors.grey, fontSize: 14),
+                  prefixIcon: const Icon(Icons.search, color: TColors.primary),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.clear, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      _onSearchChanged('');
+                    },
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    vertical: 15,
+                    horizontal: 10,
                   ),
                 ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Pull down to refresh',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ],
-            ),
-          );
-        }
-
-        return RefreshIndicator(
-          color: TColors.primary,
-          onRefresh: controller.refreshSchedules,
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (scrollInfo) {
-              if (scrollInfo.metrics.pixels ==
-                  scrollInfo.metrics.maxScrollExtent) {
-                controller.fetchSchedules(loadMore: true);
-              }
-              return false;
-            },
-            child: ListView.builder(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-              itemCount:
-                  controller.schedules.length +
-                  (controller.hasMoreData.value ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == controller.schedules.length) {
-                  return Obx(
-                    () =>
-                        controller.isLoadingMore.value
-                            ? const Padding(
-                              padding: EdgeInsets.all(20),
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  color: TColors.primary,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            )
-                            : const SizedBox.shrink(),
-                  );
-                }
-                return _ScheduleCard(
-                  schedule: controller.schedules[index],
-                  dark: dark,
-                  controller: controller,
-                );
-              },
+              ),
             ),
           ),
-        );
-      }),
+          Expanded(
+            child: Obx(() {
+              if (controller.isLoading.value) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      CircularProgressIndicator(color: TColors.primary),
+                      SizedBox(height: 16),
+                      Text(
+                        'Loading records...',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              if (controller.schedules.isEmpty) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        _emptyIcon(widget.statusFilter),
+                        size: 64,
+                        color: Colors.grey.withValues(alpha: 0.4),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'No ${controller.screenTitle.toLowerCase()} found',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Pull down to refresh',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return RefreshIndicator(
+                color: TColors.primary,
+                onRefresh: controller.refreshSchedules,
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: (scrollInfo) {
+                    if (scrollInfo.metrics.pixels ==
+                        scrollInfo.metrics.maxScrollExtent) {
+                      controller.fetchSchedules(loadMore: true);
+                    }
+                    return false;
+                  },
+                  child: ListView.builder(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+                    itemCount:
+                        controller.schedules.length +
+                        (controller.hasMoreData.value ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == controller.schedules.length) {
+                        return Obx(
+                          () =>
+                              controller.isLoadingMore.value
+                                  ? const Padding(
+                                    padding: EdgeInsets.all(20),
+                                    child: Center(
+                                      child: CircularProgressIndicator(
+                                        color: TColors.primary,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                  )
+                                  : const SizedBox.shrink(),
+                        );
+                      }
+                      return _ScheduleCard(
+                        schedule: controller.schedules[index],
+                        dark: dark,
+                        controller: controller,
+                      );
+                    },
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
     );
   }
 
@@ -649,106 +729,116 @@ class _ScheduleCard extends StatelessWidget {
                 const SizedBox(height: 14),
 
                 // ── ROW 4: Inspection Date & Time with countdown ──
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors:
-                          dark
-                              ? [
-                                const Color(0xFF3B82F6).withValues(alpha: 0.12),
-                                const Color(0xFF6366F1).withValues(alpha: 0.06),
-                              ]
-                              : [
-                                const Color(0xFF3B82F6).withValues(alpha: 0.06),
-                                const Color(0xFF6366F1).withValues(alpha: 0.03),
-                              ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: const Color(
-                        0xFF3B82F6,
-                      ).withValues(alpha: dark ? 0.15 : 0.1),
-                      width: 0.5,
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(
-                                0xFF3B82F6,
-                              ).withValues(alpha: 0.3),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
-                          Icons.schedule_rounded,
-                          color: Colors.white,
-                          size: 18,
-                        ),
+                if (schedule.inspectionStatus != InspectionStatuses.inspected)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors:
+                            dark
+                                ? [
+                                  const Color(
+                                    0xFF3B82F6,
+                                  ).withValues(alpha: 0.12),
+                                  const Color(
+                                    0xFF6366F1,
+                                  ).withValues(alpha: 0.06),
+                                ]
+                                : [
+                                  const Color(
+                                    0xFF3B82F6,
+                                  ).withValues(alpha: 0.06),
+                                  const Color(
+                                    0xFF6366F1,
+                                  ).withValues(alpha: 0.03),
+                                ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Inspection Date & Time',
-                              style: txtTheme.labelSmall?.copyWith(
-                                color:
-                                    dark
-                                        ? Colors.grey.shade500
-                                        : const Color(0xFF94A3B8),
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
-                              ),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(
+                          0xFF3B82F6,
+                        ).withValues(alpha: dark ? 0.15 : 0.1),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF3B82F6), Color(0xFF6366F1)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
                             ),
-                            const SizedBox(height: 3),
-                            Text(
-                              schedule.formattedInspectionDate,
-                              style: txtTheme.titleSmall?.copyWith(
-                                fontWeight: FontWeight.w800,
-                                color: const Color(0xFF3B82F6),
-                                fontSize: 14,
-                                letterSpacing: -0.2,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (schedule.inspectionDateTime != null) ...[
-                              const SizedBox(height: 4),
-                              _CountdownText(
-                                targetDate: schedule.inspectionDateTime!,
-                                style: txtTheme.labelSmall?.copyWith(
-                                  color: const Color(0xFF3B82F6),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 10,
-                                ),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(
+                                  0xFF3B82F6,
+                                ).withValues(alpha: 0.3),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
                               ),
                             ],
-                          ],
+                          ),
+                          child: const Icon(
+                            Icons.schedule_rounded,
+                            color: Colors.white,
+                            size: 18,
+                          ),
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Inspection Date & Time',
+                                style: txtTheme.labelSmall?.copyWith(
+                                  color:
+                                      dark
+                                          ? Colors.grey.shade500
+                                          : const Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                schedule.formattedInspectionDate,
+                                style: txtTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: const Color(0xFF3B82F6),
+                                  fontSize: 14,
+                                  letterSpacing: -0.2,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (schedule.inspectionDateTime != null) ...[
+                                const SizedBox(height: 4),
+                                _CountdownText(
+                                  targetDate: schedule.inspectionDateTime!,
+                                  style: txtTheme.labelSmall?.copyWith(
+                                    color: const Color(0xFF3B82F6),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
+                if (schedule.inspectionStatus != InspectionStatuses.inspected)
+                  const SizedBox(height: 12),
 
                 // ── ROW 5: Map / Directions ──
                 if (schedule.inspectionAddress.isNotEmpty)

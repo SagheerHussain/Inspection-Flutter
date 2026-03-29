@@ -97,6 +97,9 @@ class LoginController extends GetxController {
       localStorage.write('user_id', storedUserId);
       localStorage.write('uid', storedUserId);
       localStorage.write('mongodb_id', storedUserId);
+      localStorage.write('USER_EMAIL', user.email);
+      localStorage.write('USER_NAME', user.fullName);
+      localStorage.write('USER_USERNAME', user.userName);
       localStorage.write('INSPECTION_ENGINEER_NUMBER', user.phoneNumber);
       localStorage.write('USER_ROLE', user.role.name);
 

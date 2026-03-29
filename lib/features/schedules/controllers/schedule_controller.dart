@@ -14,12 +14,16 @@ class ScheduleController extends GetxController {
   static ScheduleController get instance => Get.find();
 
   final String statusFilter;
-  final String searchQuery;
+  final RxString searchQuery = ''.obs;
 
   ScheduleController({
     this.statusFilter = InspectionStatuses.scheduled,
-    this.searchQuery = '',
-  });
+    String? initialSearchQuery = '',
+  }) {
+    if (initialSearchQuery != null) {
+      searchQuery.value = initialSearchQuery;
+    }
+  }
 
   final schedules = <ScheduleModel>[].obs;
   final isLoading = false.obs;
@@ -200,7 +204,7 @@ class ScheduleController extends GetxController {
     totalRecords.value = maxTotal;
 
     // Apply search filter
-    final query = searchQuery.toLowerCase();
+    final query = searchQuery.value.toLowerCase();
     final filtered = pageResults.where((record) {
       final idMatch =
           record.appointmentId.toLowerCase().contains(query);
@@ -227,7 +231,7 @@ class ScheduleController extends GetxController {
 
   /// Get display title based on status filter
   String get screenTitle {
-    if (searchQuery.isNotEmpty) return 'Search Results';
+    if (searchQuery.value.isNotEmpty) return 'Search Results';
     if (statusFilter == 'Upcoming' ||
         statusFilter == InspectionStatuses.scheduled)
       return 'Schedules';
@@ -242,7 +246,7 @@ class ScheduleController extends GetxController {
 
   /// Get subtitle
   String get screenSubtitle {
-    if (searchQuery.isNotEmpty) return 'matches found';
+    if (searchQuery.value.isNotEmpty) return 'matches found';
     if (statusFilter == 'Upcoming' ||
         statusFilter == InspectionStatuses.scheduled)
       return 'inspection leads';

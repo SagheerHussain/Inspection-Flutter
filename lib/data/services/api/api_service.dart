@@ -178,7 +178,7 @@ class ApiService {
       debugPrint('📦 Body: ${jsonEncode(body)}');
 
       final request = http.Request('DELETE', Uri.parse(url));
-      request.headers.addAll(_headers);
+      request.headers.addAll(_headersForUrl(url));
       request.body = jsonEncode(body);
 
       final streamedResponse = await request.send().timeout(
@@ -217,11 +217,9 @@ class ApiService {
       final request = http.MultipartRequest('POST', Uri.parse(url));
 
       // Add Headers
-      final token = authToken;
-      if (token != null && token.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-      request.headers['Accept'] = 'application/json';
+      final headers = _headersForUrl(url);
+      headers.remove('Content-Type'); // Let http set multipart boundary
+      request.headers.addAll(headers);
 
       // Add Fields
       request.fields.addAll(fields);

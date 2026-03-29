@@ -45,6 +45,16 @@ class UserController extends GetxController {
   @override
   void onInit() {
     fetchUserRecord();
+    
+    // ── Bind Profile Controllers to User Data ──
+    ever(user, (data) {
+      email.text = data.email;
+      fullName.text = data.fullName;
+      username.text = data.userName;
+      phoneNo.text = data.phoneNumber;
+      profileImageUrl.value = data.profilePicture;
+    });
+    
     super.onInit();
   }
 
@@ -54,6 +64,8 @@ class UserController extends GetxController {
       // ── Robust Local Sync: Try loading basic identifiers from GetStorage first ──
       final storage = GetStorage();
       final storedEmail = storage.read('USER_EMAIL')?.toString() ?? '';
+      final storedName = storage.read('USER_NAME')?.toString() ?? '';
+      final storedUsername = storage.read('USER_USERNAME')?.toString() ?? '';
       final storedId = storage.read('USER_ID')?.toString() ?? '';
       final storedPhone =
           storage.read('INSPECTION_ENGINEER_NUMBER')?.toString() ?? '';
@@ -63,6 +75,8 @@ class UserController extends GetxController {
         user.value = user.value.copyWith(
           id: storedId,
           email: storedEmail,
+          fullName: storedName,
+          userName: storedUsername,
           phoneNumber: storedPhone,
           role: UserModel.mapRoleStringToEnum(storedRole),
         );

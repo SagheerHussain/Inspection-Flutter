@@ -1484,6 +1484,12 @@ class InspectionFormController extends GetxController {
           if (taxVal != 'Limited Period') continue;
         }
 
+        // Hypothecated To visibility logic
+        if (field.key == 'hypothecatedTo') {
+          final hypVal = getFieldValue('hypothecationDetails');
+          if (hypVal == 'No' || hypVal == 'Not Hypothecated') continue;
+        }
+
         // Conditional requirements for images based on Not Applicable/Not Present selection
         final parentFields = {
           'lhsFoglampImages': 'lhsFoglamp',

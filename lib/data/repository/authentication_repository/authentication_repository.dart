@@ -107,6 +107,9 @@ class AuthenticationRepository extends GetxController {
       final userId = (rawId == null || rawId.isEmpty) ? 'engineer' : rawId;
       await TLocalStorage.init(userId);
 
+      // ── NEW: Initialize UserController with stored data for CRM users ──
+      await UserController.instance.fetchUserRecord();
+
       // Re-link device to user in OneSignal on app restart
       if (userId != 'engineer' && userId.toString().isNotEmpty) {
         await NotificationService.instance.login(userId);
@@ -394,9 +397,12 @@ class AuthenticationRepository extends GetxController {
 
       // Clear custom auth token and session data
       await ApiService.clearToken();
-      await deviceStorage.remove('INSPECTION_ENGINEER_NUMBER');
       await deviceStorage.remove('USER_ID');
+      await deviceStorage.remove('USER_EMAIL');
+      await deviceStorage.remove('USER_NAME');
+      await deviceStorage.remove('USER_USERNAME');
       await deviceStorage.remove('USER_ROLE');
+      await deviceStorage.remove('INSPECTION_ENGINEER_NUMBER');
 
       // Clear LoginController fields if registered to prevent auto-fill on next visit
       try {
