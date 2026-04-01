@@ -43,7 +43,9 @@ class ApiConstants {
   // ──────────────────────────────────────────
   // AUTH ENDPOINTS
   // ──────────────────────────────────────────
-  static String get loginUrl => 'https://otobixcrm.vercel.app/api/users/login';
+  // static String get loginUrl => 'https://otobixcrm.vercel.app/api/users/login';
+  static String get loginUrl =>
+      'https://otobixcrm-alpha.vercel.app/api/users/login';
 
   // ──────────────────────────────────────────
   // SCHEDULE / TELECALLING ENDPOINTS
@@ -88,7 +90,7 @@ class ApiConstants {
       '${baseUrl}inspection/car/add-car-through-inspection';
 
   static String get fetchVehicleDetailsUrl =>
-      '${baseUrl}customer/sell-my-car/fetch-vehicle-registration-details';
+      '${baseUrl}inspection/fetch-vehicle-details-via-attestr';
 
   static String get getAllDropdownsUrl =>
       '${baseUrl}inspection/dropdowns/get-all-dropdowns-list';

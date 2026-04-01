@@ -7,54 +7,57 @@ List<String> _resolveMedia(
   List<String> localPaths,
   Map<String, Map<String, String>> cloudinaryData,
 ) {
-  return localPaths.map((p) {
-    final data = cloudinaryData[p];
-    return data?['url'] ?? p;
-  }).toList();
+  return localPaths
+      .map((p) => cloudinaryData[p]?['url'] ?? p)
+      .where((url) => url.startsWith('http'))
+      .toList();
 }
 
 /// Gets a string value from the form data map.
-String _s(InspectionFormModel d, String key) => d.data[key]?.toString() ?? '';
+String _s(InspectionFormModel d, String key) {
+  final v = d.data[key];
+  if (v == null) return '';
+  if (v is List) {
+    // If it's a list, join elements with a comma to avoid [val1, val2] string representation
+    return v.map((e) => e.toString()).join(', ');
+  }
+  return v.toString();
+}
 
 /// Gets an int value from the form data map.
 int _i(InspectionFormModel d, String key) {
   final v = d.data[key];
   if (v is int) return v;
   if (v is String) return int.tryParse(v) ?? 0;
+  if (v is List && v.isNotEmpty) {
+    final first = v.first;
+    if (first is int) return first;
+    if (first is String) return int.tryParse(first) ?? 0;
+  }
   return 0;
 }
 
 /// Parses a DateTime from form data.
 DateTime? _dt(InspectionFormModel d, String key) {
   final v = d.data[key];
-  if (v == null) {
-    // debugPrint('📅 _dt($key) → null (key not found in data)');
-    return null;
+  if (v == null) return null;
+  if (v is DateTime) return v;
+  
+  String? vs;
+  if (v is String) {
+    vs = v;
+  } else if (v is List && v.isNotEmpty) {
+    final first = v.first;
+    if (first is String) vs = first;
   }
-  if (v is DateTime) {
-    // debugPrint('📅 _dt($key) → $v (already DateTime)');
-    return v;
-  }
-  if (v is num) {
-    // Could be a timestamp in milliseconds
-    if (v > 1000000000000) {
-      final result = DateTime.fromMillisecondsSinceEpoch(v.toInt());
-      // debugPrint('📅 _dt($key) → $result (parsed from ms timestamp: $v)');
-      return result;
-    }
-    // debugPrint('📅 _dt($key) → null (numeric but not a timestamp: $v)');
-    return null;
-  }
-  if (v is String && v.isNotEmpty) {
+
+  if (vs != null && vs.isNotEmpty) {
     // Try standard ISO parse first
-    final iso = DateTime.tryParse(v);
-    if (iso != null) {
-      // debugPrint('📅 _dt($key) → $iso (parsed from ISO: "$v")');
-      return iso;
-    }
+    final iso = DateTime.tryParse(vs);
+    if (iso != null) return iso;
 
     // Normalize separators: replace / with -
-    final normalized = v.replaceAll('/', '-');
+    final normalized = vs.replaceAll('/', '-');
 
     // Try DD-MM-YYYY format
     final parts = normalized.split('-');
@@ -63,31 +66,22 @@ DateTime? _dt(InspectionFormModel d, String key) {
       final p1 = int.tryParse(parts[1]);
       final p2 = int.tryParse(parts[2]);
       if (p0 != null && p1 != null && p2 != null) {
-        // Determine order: if first part > 31, it's YYYY-MM-DD; otherwise DD-MM-YYYY
-        DateTime result;
-        if (p0 > 31) {
-          result = DateTime(p0, p1, p2); // YYYY-MM-DD
-        } else {
-          result = DateTime(p2, p1, p0); // DD-MM-YYYY
-        }
-        // debugPrint('📅 _dt($key) → $result (parsed from "$v")');
-        return result;
+        if (p0 > 31) return DateTime(p0, p1, p2); // YYYY-MM-DD
+        return DateTime(p2, p1, p0); // DD-MM-YYYY
       }
     }
     // Try MM-YYYY format
     if (parts.length == 2) {
       final m = int.tryParse(parts[0]);
       final y = int.tryParse(parts[1]);
-      if (m != null && y != null) {
-        final result = DateTime(y, m);
-        // debugPrint('📅 _dt($key) → $result (parsed from MM-YYYY: "$v")');
-        return result;
-      }
+      if (m != null && y != null) return DateTime(y, m);
     }
-    // debugPrint('📅 _dt($key) → null (could not parse: "$v", type: ${v.runtimeType})');
-  } else {
-    // debugPrint('📅 _dt($key) → null (value is ${v.runtimeType}: "$v")');
   }
+  
+  if (v is num && v > 1000000000000) {
+    return DateTime.fromMillisecondsSinceEpoch(v.toInt());
+  }
+  
   return null;
 }
 
@@ -115,16 +109,16 @@ CarModel buildCarModelFromForm(
   List<String> img(String k) => _imgs(k, imageFiles, cloudinaryData);
 
   // ── Pre-compute values for "changed to" fields ──
-  // When comment says "changed to XDropdownList":
-  //   String field = single value (or comma-separated if multiple)
-  //   List<String> field = list of values
-  // The form currently stores a single value. We wrap it in a list for the new field.
   List<String> asList(String k) {
+    final raw = data.data[k];
+    if (raw is List) return raw.map((e) => e.toString()).toList();
+    
     final v = s(k);
     if (v.isEmpty) return [];
     if (v.contains(',')) return v.split(',').map((e) => e.trim()).toList();
     return [v];
   }
+
 
   // ── Pre-compute merged fields ──
   // musicSystem + stereo → infotainmentSystemDropdownList
@@ -182,6 +176,7 @@ CarModel buildCarModelFromForm(
         s('appointmentId').isNotEmpty ? s('appointmentId') : appointmentId,
     // renamed to inspectionCity
     city: s('city'),
+    inspectionDate: dt('inspectionDate'),
     // removed
     registrationType: s('registrationType'),
     // changed to rcBookAvailabilityDropdownList

@@ -40,6 +40,7 @@ class ScheduleController extends GetxController {
     String? make,
     String? model,
     String? variant,
+    String? ownerName,
   }) {
     final tags = [
       'schedule_Running',
@@ -64,6 +65,7 @@ class ScheduleController extends GetxController {
             make: make,
             model: model,
             variant: variant,
+            ownerName: ownerName,
           );
           controller.schedules[index] = updated;
           controller.schedules.refresh();
@@ -155,8 +157,11 @@ class ScheduleController extends GetxController {
       totalRecords.value = apiTotal;
 
       final List<dynamic> dataList = response['data'] ?? [];
-      final newRecords =
+      final List<ScheduleModel> newRecords =
           dataList.map((json) => ScheduleModel.fromJson(json)).toList();
+
+      // Apply locally saved snapshots to ensure UI shows the latest manual updates
+      _applyLocalSnapshots(newRecords);
 
       schedules.addAll(newRecords);
 
@@ -215,11 +220,38 @@ class ScheduleController extends GetxController {
       return idMatch || phoneMatch || ownerMatch;
     }).toList();
 
+    // Apply locally saved snapshots for search results too
+    _applyLocalSnapshots(filtered);
+
     schedules.addAll(filtered);
 
     // For search, stop paginating if no new results came back
     if (pageResults.isEmpty) {
       hasMoreData.value = false;
+    }
+  }
+
+  /// Helper to overlay locally saved snapshots (manual edits) onto API results
+  void _applyLocalSnapshots(List<ScheduleModel> records) {
+    if (records.isEmpty) return;
+    final storage = GetStorage();
+
+    for (int i = 0; i < records.length; i++) {
+      final snapshot = storage.read('snapshot_${records[i].appointmentId}');
+      if (snapshot != null && snapshot is Map) {
+        final make = snapshot['make']?.toString();
+        final model = snapshot['model']?.toString();
+        final variant = snapshot['variant']?.toString();
+        final ownerName = snapshot['customerName']?.toString();
+
+        records[i] = records[i].copyWith(
+          make: (make != null && make.isNotEmpty) ? make : null,
+          model: (model != null && model.isNotEmpty) ? model : null,
+          variant: (variant != null && variant.isNotEmpty) ? variant : null,
+          ownerName:
+              (ownerName != null && ownerName.isNotEmpty) ? ownerName : null,
+        );
+      }
     }
   }
 

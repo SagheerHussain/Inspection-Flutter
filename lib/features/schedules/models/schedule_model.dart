@@ -162,6 +162,7 @@ class ScheduleModel {
     String? make,
     String? model,
     String? variant,
+    String? ownerName,
     String? inspectionStatus,
     // Add more fields if needed
   }) {
@@ -169,7 +170,7 @@ class ScheduleModel {
       id: id,
       carRegistrationNumber: carRegistrationNumber,
       yearOfRegistration: yearOfRegistration,
-      ownerName: ownerName,
+      ownerName: ownerName ?? this.ownerName,
       ownershipSerialNumber: ownershipSerialNumber,
       make: make ?? this.make,
       model: model ?? this.model,

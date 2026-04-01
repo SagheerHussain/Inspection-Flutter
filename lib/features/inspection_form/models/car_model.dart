@@ -4,6 +4,7 @@ class CarModel {
   final String emailAddress; // renamed to ieName
   final String appointmentId;
   final String city; // renamed to inspectionCity
+  final DateTime? inspectionDate;
   final String registrationType; // removed
   final String rcBookAvailability; // changed to rcBookAvailabilityDropdownList
   final String rcCondition;
@@ -435,6 +436,7 @@ class CarModel {
     required this.emailAddress,
     required this.appointmentId,
     required this.city,
+    required this.inspectionDate,
     required this.registrationType,
     required this.rcBookAvailability,
     required this.rcCondition,
@@ -847,6 +849,7 @@ class CarModel {
       emailAddress: json["emailAddress"] ?? 'N/A',
       appointmentId: json["appointmentId"] ?? 'N/A',
       city: json["city"] ?? 'N/A',
+      inspectionDate: parseMongoDbDate(json["inspectionDate"]),
       registrationType: json["registrationType"] ?? 'N/A',
       rcBookAvailability: json["rcBookAvailability"] ?? 'N/A',
       rcCondition: json["rcCondition"] ?? 'N/A',
@@ -1634,73 +1637,74 @@ class CarModel {
     // ✅ New fields all (nullable-safe)
     "ieName": ieName,
     "inspectionCity": inspectionCity,
+    "inspectionDate": _dateToIstUtcIso(inspectionDate),
     "rcBookAvailabilityDropdownList":
-        rcBookAvailabilityDropdownList.map((x) => x).toList(),
+        rcBookAvailabilityDropdownList.join(', '),
     "fitnessValidity": _dateToIstUtcIso(fitnessValidity),
     "yearAndMonthOfManufacture": _dateToIstUtcIso(yearAndMonthOfManufacture),
-    "mismatchInRcDropdownList": mismatchInRcDropdownList.map((x) => x).toList(),
-    "insuranceDropdownList": insuranceDropdownList.map((x) => x).toList(),
+    "mismatchInRcDropdownList": mismatchInRcDropdownList.join(', '),
+    "insuranceDropdownList": insuranceDropdownList.join(', '),
     "policyNumber": policyNumber,
     "mismatchInInsuranceDropdownList":
-        mismatchInInsuranceDropdownList.map((x) => x).toList(),
+        mismatchInInsuranceDropdownList.join(', '),
     "additionalDetailsDropdownList":
-        additionalDetailsDropdownList.map((x) => x).toList(),
+        additionalDetailsDropdownList.join(', '),
     "rcTokenImages": rcTokenImages.map((x) => x).toList(),
     "insuranceImages": insuranceImages.map((x) => x).toList(),
     "duplicateKeyImages": duplicateKeyImages.map((x) => x).toList(),
     "form26AndGdCopyIfRcIsLostImages":
         form26AndGdCopyIfRcIsLostImages.map((x) => x).toList(),
-    "bonnetDropdownList": bonnetDropdownList.map((x) => x).toList(),
+    "bonnetDropdownList": bonnetDropdownList.join(', '),
     "frontWindshieldDropdownList":
-        frontWindshieldDropdownList.map((x) => x).toList(),
-    "roofDropdownList": roofDropdownList.map((x) => x).toList(),
-    "frontBumperDropdownList": frontBumperDropdownList.map((x) => x).toList(),
-    "lhsHeadlampDropdownList": lhsHeadlampDropdownList.map((x) => x).toList(),
-    "lhsFoglampDropdownList": lhsFoglampDropdownList.map((x) => x).toList(),
-    "rhsHeadlampDropdownList": rhsHeadlampDropdownList.map((x) => x).toList(),
-    "rhsFoglampDropdownList": rhsFoglampDropdownList.map((x) => x).toList(),
-    "lhsFenderDropdownList": lhsFenderDropdownList.map((x) => x).toList(),
-    "lhsOrvmDropdownList": lhsOrvmDropdownList.map((x) => x).toList(),
-    "lhsAPillarDropdownList": lhsAPillarDropdownList.map((x) => x).toList(),
-    "lhsBPillarDropdownList": lhsBPillarDropdownList.map((x) => x).toList(),
-    "lhsCPillarDropdownList": lhsCPillarDropdownList.map((x) => x).toList(),
+        frontWindshieldDropdownList.join(', '),
+    "roofDropdownList": roofDropdownList.join(', '),
+    "frontBumperDropdownList": frontBumperDropdownList.join(', '),
+    "lhsHeadlampDropdownList": lhsHeadlampDropdownList.join(', '),
+    "lhsFoglampDropdownList": lhsFoglampDropdownList.join(', '),
+    "rhsHeadlampDropdownList": rhsHeadlampDropdownList.join(', '),
+    "rhsFoglampDropdownList": rhsFoglampDropdownList.join(', '),
+    "lhsFenderDropdownList": lhsFenderDropdownList.join(', '),
+    "lhsOrvmDropdownList": lhsOrvmDropdownList.join(', '),
+    "lhsAPillarDropdownList": lhsAPillarDropdownList.join(', '),
+    "lhsBPillarDropdownList": lhsBPillarDropdownList.join(', '),
+    "lhsCPillarDropdownList": lhsCPillarDropdownList.join(', '),
     "lhsFrontWheelDropdownList":
-        lhsFrontWheelDropdownList.map((x) => x).toList(),
-    "lhsFrontTyreDropdownList": lhsFrontTyreDropdownList.map((x) => x).toList(),
-    "lhsRearWheelDropdownList": lhsRearWheelDropdownList.map((x) => x).toList(),
-    "lhsRearTyreDropdownList": lhsRearTyreDropdownList.map((x) => x).toList(),
-    "lhsFrontDoorDropdownList": lhsFrontDoorDropdownList.map((x) => x).toList(),
-    "lhsRearDoorDropdownList": lhsRearDoorDropdownList.map((x) => x).toList(),
+        lhsFrontWheelDropdownList.join(', '),
+    "lhsFrontTyreDropdownList": lhsFrontTyreDropdownList.join(', '),
+    "lhsRearWheelDropdownList": lhsRearWheelDropdownList.join(', '),
+    "lhsRearTyreDropdownList": lhsRearTyreDropdownList.join(', '),
+    "lhsFrontDoorDropdownList": lhsFrontDoorDropdownList.join(', '),
+    "lhsRearDoorDropdownList": lhsRearDoorDropdownList.join(', '),
     "lhsRunningBorderDropdownList":
-        lhsRunningBorderDropdownList.map((x) => x).toList(),
+        lhsRunningBorderDropdownList.join(', '),
     "lhsQuarterPanelDropdownList":
-        lhsQuarterPanelDropdownList.map((x) => x).toList(),
-    "rearBumperDropdownList": rearBumperDropdownList.map((x) => x).toList(),
-    "lhsTailLampDropdownList": lhsTailLampDropdownList.map((x) => x).toList(),
-    "rhsTailLampDropdownList": rhsTailLampDropdownList.map((x) => x).toList(),
+        lhsQuarterPanelDropdownList.join(', '),
+    "rearBumperDropdownList": rearBumperDropdownList.join(', '),
+    "lhsTailLampDropdownList": lhsTailLampDropdownList.join(', '),
+    "rhsTailLampDropdownList": rhsTailLampDropdownList.join(', '),
     "rearWindshieldDropdownList":
-        rearWindshieldDropdownList.map((x) => x).toList(),
-    "bootDoorDropdownList": bootDoorDropdownList.map((x) => x).toList(),
-    "spareTyreDropdownList": spareTyreDropdownList.map((x) => x).toList(),
-    "bootFloorDropdownList": bootFloorDropdownList.map((x) => x).toList(),
-    "rhsRearWheelDropdownList": rhsRearWheelDropdownList.map((x) => x).toList(),
-    "rhsRearTyreDropdownList": rhsRearTyreDropdownList.map((x) => x).toList(),
+        rearWindshieldDropdownList.join(', '),
+    "bootDoorDropdownList": bootDoorDropdownList.join(', '),
+    "spareTyreDropdownList": spareTyreDropdownList.join(', '),
+    "bootFloorDropdownList": bootFloorDropdownList.join(', '),
+    "rhsRearWheelDropdownList": rhsRearWheelDropdownList.join(', '),
+    "rhsRearTyreDropdownList": rhsRearTyreDropdownList.join(', '),
     "rhsFrontWheelDropdownList":
-        rhsFrontWheelDropdownList.map((x) => x).toList(),
-    "rhsFrontTyreDropdownList": rhsFrontTyreDropdownList.map((x) => x).toList(),
+        rhsFrontWheelDropdownList.join(', '),
+    "rhsFrontTyreDropdownList": rhsFrontTyreDropdownList.join(', '),
     "rhsQuarterPanelDropdownList":
-        rhsQuarterPanelDropdownList.map((x) => x).toList(),
-    "rhsAPillarDropdownList": rhsAPillarDropdownList.map((x) => x).toList(),
-    "rhsBPillarDropdownList": rhsBPillarDropdownList.map((x) => x).toList(),
-    "rhsCPillarDropdownList": rhsCPillarDropdownList.map((x) => x).toList(),
+        rhsQuarterPanelDropdownList.join(', '),
+    "rhsAPillarDropdownList": rhsAPillarDropdownList.join(', '),
+    "rhsBPillarDropdownList": rhsBPillarDropdownList.join(', '),
+    "rhsCPillarDropdownList": rhsCPillarDropdownList.join(', '),
     "rhsRunningBorderDropdownList":
-        rhsRunningBorderDropdownList.map((x) => x).toList(),
-    "rhsRearDoorDropdownList": rhsRearDoorDropdownList.map((x) => x).toList(),
-    "rhsFrontDoorDropdownList": rhsFrontDoorDropdownList.map((x) => x).toList(),
-    "rhsOrvmDropdownList": rhsOrvmDropdownList.map((x) => x).toList(),
-    "rhsFenderDropdownList": rhsFenderDropdownList.map((x) => x).toList(),
+        rhsRunningBorderDropdownList.join(', '),
+    "rhsRearDoorDropdownList": rhsRearDoorDropdownList.join(', '),
+    "rhsFrontDoorDropdownList": rhsFrontDoorDropdownList.join(', '),
+    "rhsOrvmDropdownList": rhsOrvmDropdownList.join(', '),
+    "rhsFenderDropdownList": rhsFenderDropdownList.join(', '),
     "commentsOnExteriorDropdownList":
-        commentsOnExteriorDropdownList.map((x) => x).toList(),
+        commentsOnExteriorDropdownList.join(', '),
     "frontMainImages": frontMainImages.map((x) => x).toList(),
     "bonnetClosedImages": bonnetClosedImages.map((x) => x).toList(),
     "bonnetOpenImages": bonnetOpenImages.map((x) => x).toList(),
@@ -1727,68 +1731,68 @@ class CarModel {
     "rhsRearWheelImages": rhsRearWheelImages.map((x) => x).toList(),
     "rhsFrontWheelImages": rhsFrontWheelImages.map((x) => x).toList(),
     "upperCrossMemberDropdownList":
-        upperCrossMemberDropdownList.map((x) => x).toList(),
+        upperCrossMemberDropdownList.join(', '),
     "radiatorSupportDropdownList":
-        radiatorSupportDropdownList.map((x) => x).toList(),
+        radiatorSupportDropdownList.join(', '),
     "headlightSupportDropdownList":
-        headlightSupportDropdownList.map((x) => x).toList(),
+        headlightSupportDropdownList.join(', '),
     "lowerCrossMemberDropdownList":
-        lowerCrossMemberDropdownList.map((x) => x).toList(),
-    "lhsApronDropdownList": lhsApronDropdownList.map((x) => x).toList(),
-    "rhsApronDropdownList": rhsApronDropdownList.map((x) => x).toList(),
-    "firewallDropdownList": firewallDropdownList.map((x) => x).toList(),
-    "cowlTopDropdownList": cowlTopDropdownList.map((x) => x).toList(),
-    "engineDropdownList": engineDropdownList.map((x) => x).toList(),
-    "batteryDropdownList": batteryDropdownList.map((x) => x).toList(),
-    "coolantDropdownList": coolantDropdownList.map((x) => x).toList(),
+        lowerCrossMemberDropdownList.join(', '),
+    "lhsApronDropdownList": lhsApronDropdownList.join(', '),
+    "rhsApronDropdownList": rhsApronDropdownList.join(', '),
+    "firewallDropdownList": firewallDropdownList.join(', '),
+    "cowlTopDropdownList": cowlTopDropdownList.join(', '),
+    "engineDropdownList": engineDropdownList.join(', '),
+    "batteryDropdownList": batteryDropdownList.join(', '),
+    "coolantDropdownList": coolantDropdownList.join(', '),
     "engineOilLevelDipstickDropdownList":
-        engineOilLevelDipstickDropdownList.map((x) => x).toList(),
-    "engineOilDropdownList": engineOilDropdownList.map((x) => x).toList(),
-    "engineMountDropdownList": engineMountDropdownList.map((x) => x).toList(),
+        engineOilLevelDipstickDropdownList.join(', '),
+    "engineOilDropdownList": engineOilDropdownList.join(', '),
+    "engineMountDropdownList": engineMountDropdownList.join(', '),
     "enginePermisableBlowByDropdownList":
-        enginePermisableBlowByDropdownList.map((x) => x).toList(),
-    "exhaustSmokeDropdownList": exhaustSmokeDropdownList.map((x) => x).toList(),
-    "clutchDropdownList": clutchDropdownList.map((x) => x).toList(),
-    "gearShiftDropdownList": gearShiftDropdownList.map((x) => x).toList(),
+        enginePermisableBlowByDropdownList.join(', '),
+    "exhaustSmokeDropdownList": exhaustSmokeDropdownList.join(', '),
+    "clutchDropdownList": clutchDropdownList.join(', '),
+    "gearShiftDropdownList": gearShiftDropdownList.join(', '),
     "commentsOnEngineDropdownList":
-        commentsOnEngineDropdownList.map((x) => x).toList(),
+        commentsOnEngineDropdownList.join(', '),
     "commentsOnEngineOilDropdownList":
-        commentsOnEngineOilDropdownList.map((x) => x).toList(),
+        commentsOnEngineOilDropdownList.join(', '),
     "commentsOnTowingDropdownList":
-        commentsOnTowingDropdownList.map((x) => x).toList(),
+        commentsOnTowingDropdownList.join(', '),
     "commentsOnTransmissionDropdownList":
-        commentsOnTransmissionDropdownList.map((x) => x).toList(),
+        commentsOnTransmissionDropdownList.join(', '),
     "commentsOnRadiatorDropdownList":
-        commentsOnRadiatorDropdownList.map((x) => x).toList(),
+        commentsOnRadiatorDropdownList.join(', '),
     "commentsOnOthersDropdownList":
-        commentsOnOthersDropdownList.map((x) => x).toList(),
+        commentsOnOthersDropdownList.join(', '),
     "engineBayImages": engineBayImages.map((x) => x).toList(),
     "lhsApronImages": lhsApronImages.map((x) => x).toList(),
     "rhsApronImages": rhsApronImages.map((x) => x).toList(),
     "additionalEngineImages": additionalEngineImages.map((x) => x).toList(),
     "engineVideo": engineVideo.map((x) => x).toList(),
     "exhaustSmokeVideo": exhaustSmokeVideo.map((x) => x).toList(),
-    "steeringDropdownList": steeringDropdownList.map((x) => x).toList(),
-    "brakesDropdownList": brakesDropdownList.map((x) => x).toList(),
-    "suspensionDropdownList": suspensionDropdownList.map((x) => x).toList(),
+    "steeringDropdownList": steeringDropdownList.join(', '),
+    "brakesDropdownList": brakesDropdownList.join(', '),
+    "suspensionDropdownList": suspensionDropdownList.join(', '),
     "odometerReadingBeforeTestDrive": odometerReadingBeforeTestDrive,
     "rearWiperWasherDropdownList":
-        rearWiperWasherDropdownList.map((x) => x).toList(),
-    "rearDefoggerDropdownList": rearDefoggerDropdownList.map((x) => x).toList(),
+        rearWiperWasherDropdownList.join(', '),
+    "rearDefoggerDropdownList": rearDefoggerDropdownList.join(', '),
     "infotainmentSystemDropdownList":
-        infotainmentSystemDropdownList.map((x) => x).toList(),
+        infotainmentSystemDropdownList.join(', '),
     "steeringMountedMediaControls": steeringMountedMediaControls,
     "steeringMountedSystemControls": steeringMountedSystemControls,
     "rhsFrontDoorFeaturesDropdownList":
-        rhsFrontDoorFeaturesDropdownList.map((x) => x).toList(),
+        rhsFrontDoorFeaturesDropdownList.join(', '),
     "lhsFrontDoorFeaturesDropdownList":
-        lhsFrontDoorFeaturesDropdownList.map((x) => x).toList(),
+        lhsFrontDoorFeaturesDropdownList.join(', '),
     "rhsRearDoorFeaturesDropdownList":
-        rhsRearDoorFeaturesDropdownList.map((x) => x).toList(),
+        rhsRearDoorFeaturesDropdownList.join(', '),
     "lhsRearDoorFeaturesDropdownList":
-        lhsRearDoorFeaturesDropdownList.map((x) => x).toList(),
+        lhsRearDoorFeaturesDropdownList.join(', '),
     "commentOnInteriorDropdownList":
-        commentOnInteriorDropdownList.map((x) => x).toList(),
+        commentOnInteriorDropdownList.join(', '),
     "driverAirbag": driverAirbag,
     "coDriverAirbag": coDriverAirbag,
     "coDriverSeatAirbag": coDriverSeatAirbag,
@@ -1797,7 +1801,7 @@ class CarModel {
     "driverSeatAirbag": driverSeatAirbag,
     "rhsCurtainAirbag": rhsCurtainAirbag,
     "rhsRearSideAirbag": rhsRearSideAirbag,
-    "sunroofDropdownList": sunroofDropdownList.map((x) => x).toList(),
+    "sunroofDropdownList": sunroofDropdownList.join(', '),
     "seatsUpholstery": seatsUpholstery,
     "meterConsoleWithEngineOnImages":
         meterConsoleWithEngineOnImages.map((x) => x).toList(),
@@ -1808,7 +1812,7 @@ class CarModel {
         rearSeatsFromRightSideImages.map((x) => x).toList(),
     "dashboardImages": dashboardImages.map((x) => x).toList(),
     "reverseCameraDropdownList":
-        reverseCameraDropdownList.map((x) => x).toList(),
+        reverseCameraDropdownList.join(', '),
     "additionalInteriorImages": additionalInteriorImages.map((x) => x).toList(),
     "acTypeDropdownList": acTypeDropdownList,
     "acCoolingDropdownList": acCoolingDropdownList,
@@ -1831,42 +1835,42 @@ class CarModel {
     "rtoNocImages": rtoNocImages.map((x) => x).toList(),
     "rtoForm28Images": rtoForm28Images.map((x) => x).toList(),
     "frontWiperAndWasherDropdownList":
-        frontWiperAndWasherDropdownList.map((x) => x).toList(),
+        frontWiperAndWasherDropdownList.join(', '),
     "frontWiperAndWasherImages":
         frontWiperAndWasherImages.map((x) => x).toList(),
     "lhsRearFogLampDropdownList":
-        lhsRearFogLampDropdownList.map((x) => x).toList(),
+        lhsRearFogLampDropdownList.join(', '),
     "lhsRearFogLampImages": lhsRearFogLampImages.map((x) => x).toList(),
     "rhsRearFogLampDropdownList":
-        rhsRearFogLampDropdownList.map((x) => x).toList(),
+        rhsRearFogLampDropdownList.join(', '),
     "rhsRearFogLampImages": rhsRearFogLampImages.map((x) => x).toList(),
     "rearWiperAndWasherImages": rearWiperAndWasherImages.map((x) => x).toList(),
-    "spareWheelDropdownList": spareWheelDropdownList.map((x) => x).toList(),
+    "spareWheelDropdownList": spareWheelDropdownList.join(', '),
     "spareWheelImages": spareWheelImages.map((x) => x).toList(),
     "cowlTopImages": cowlTopImages.map((x) => x).toList(),
     "firewallImages": firewallImages.map((x) => x).toList(),
     "lhsSideMemberDropdownList":
-        lhsSideMemberDropdownList.map((x) => x).toList(),
+        lhsSideMemberDropdownList.join(', '),
     "rhsSideMemberDropdownList":
-        rhsSideMemberDropdownList.map((x) => x).toList(),
+        rhsSideMemberDropdownList.join(', '),
     "transmissionTypeDropdownList":
-        transmissionTypeDropdownList.map((x) => x).toList(),
-    "driveTrainDropdownList": driveTrainDropdownList.map((x) => x).toList(),
+        transmissionTypeDropdownList.join(', '),
+    "driveTrainDropdownList": driveTrainDropdownList.join(', '),
     "commentsOnClusterMeterDropdownList":
-        commentsOnClusterMeterDropdownList.map((x) => x).toList(),
+        commentsOnClusterMeterDropdownList.join(', '),
     "irvm": irvm,
-    "dashboardDropdownList": dashboardDropdownList.map((x) => x).toList(),
+    "dashboardDropdownList": dashboardDropdownList.join(', '),
     "acImages": acImages.map((x) => x).toList(),
     "reverseCameraImages": reverseCameraImages.map((x) => x).toList(),
     "driverSideKneeAirbag": driverSideKneeAirbag,
     "coDriverKneeSeatAirbag": coDriverKneeSeatAirbag,
-    "driverSeatDropdownList": driverSeatDropdownList.map((x) => x).toList(),
-    "coDriverSeatDropdownList": coDriverSeatDropdownList.map((x) => x).toList(),
+    "driverSeatDropdownList": driverSeatDropdownList.join(', '),
+    "coDriverSeatDropdownList": coDriverSeatDropdownList.join(', '),
     "frontCentreArmRestDropdownList":
-        frontCentreArmRestDropdownList.map((x) => x).toList(),
-    "rearSeatsDropdownList": rearSeatsDropdownList.map((x) => x).toList(),
+        frontCentreArmRestDropdownList.join(', '),
+    "rearSeatsDropdownList": rearSeatsDropdownList.join(', '),
     "thirdRowSeatsDropdownList":
-        thirdRowSeatsDropdownList.map((x) => x).toList(),
+        thirdRowSeatsDropdownList.join(', '),
     "odometerReadingAfterTestDriveImages":
         odometerReadingAfterTestDriveImages.map((x) => x).toList(),
     "odometerReadingAfterTestDriveInKms": odometerReadingAfterTestDriveInKms,
@@ -1964,7 +1968,11 @@ DateTime? parseMongoDbDate(dynamic v) {
 List<String> parseStringList(dynamic value) {
   if (value == null) return [];
   if (value is List) return value.map((e) => e.toString()).toList();
-  //   if (value is String) return [value];
-  if (value is String && value.trim().isNotEmpty) return [value];
+  if (value is String && value.trim().isNotEmpty) {
+    if (value.contains(',')) {
+      return value.split(',').map((e) => e.trim()).toList();
+    }
+    return [value];
+  }
   return [];
 }

@@ -10,6 +10,7 @@ enum FType {
   date,
   multiSelect,
   searchable,
+  dateTime,
 }
 
 /// Single form field definition
@@ -39,6 +40,15 @@ class F {
 
   const F.drop(this.key, this.label, this.options, {this.optional = false})
     : type = FType.dropdown,
+      readonly = false,
+      maxLines = 1,
+      minImages = 0,
+      maxImages = 0,
+      maxDuration = null;
+
+  const F.dateTime(this.key, this.label, {this.optional = false})
+    : type = FType.dateTime,
+      options = const [],
       readonly = false,
       maxLines = 1,
       minImages = 0,
@@ -148,7 +158,8 @@ class InspectionFieldDefs {
           'Poor',
           'Damaged',
         ]),
-        F.img('rcTokenImages', 'RC Token Image', minImages: 2),
+        F.img('rcTokenImages', 'RC Image', minImages: 2),
+        F.dateTime('inspectionDate', 'Inspection Date'),
         F.multi('mismatchInRc', 'Mismatch in RC', ['No', 'Yes']),
         F.date('registrationDate', 'Registration Date'),
         F.date('fitnessValidity', 'Fitness Validity'),

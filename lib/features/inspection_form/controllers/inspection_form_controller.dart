@@ -31,6 +31,9 @@ class InspectionFormController extends GetxController {
   final isSaving = false.obs;
   final isFetchingDetails = false.obs;
 
+  /// Fields that were auto-filled from the fetch API and should be non-editable
+  final RxSet<String> apiFetchedLockedFields = <String>{}.obs;
+
   // ── Re-Inspection state ──
   /// Tracks whether this lead originated from a Re-Inspection
   /// (set during data fetch — covers both direct Re-Inspection and Running leads that were Re-Inspected)
@@ -78,6 +81,7 @@ class InspectionFormController extends GetxController {
   /// Once this exists, the API is NEVER called again for this appointment.
   String get _snapshotKey => 'snapshot_$appointmentId';
   String get _snapshotImagesKey => 'snapshot_images_$appointmentId';
+  String get _snapshotLockedFieldsKey => 'snapshot_locked_$appointmentId';
 
   // Image storage: key → list of local file paths
   final RxMap<String, List<String>> imageFiles = <String, List<String>>{}.obs;
@@ -162,6 +166,10 @@ class InspectionFormController extends GetxController {
             borderRadius: 12,
             duration: const Duration(seconds: 2),
           );
+          final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
+          if (savedLockedFields != null && savedLockedFields is List) {
+            apiFetchedLockedFields.assignAll(savedLockedFields.cast<String>());
+          }
           _syncScheduleWithChanges();
           isLoading.value = false;
           return;
@@ -236,6 +244,12 @@ class InspectionFormController extends GetxController {
               borderRadius: 12,
               duration: const Duration(seconds: 2),
             );
+            final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
+            if (savedLockedFields != null && savedLockedFields is List) {
+              apiFetchedLockedFields.assignAll(
+                savedLockedFields.cast<String>(),
+              );
+            }
             _syncScheduleWithChanges();
             isLoading.value = false;
             return;
@@ -265,7 +279,7 @@ class InspectionFormController extends GetxController {
               colorText: Colors.white,
               margin: const EdgeInsets.all(12),
               borderRadius: 12,
-              duration: const Duration(seconds: 3),
+              duration: const Duration(seconds: 2),
             );
 
             _syncScheduleWithChanges();
@@ -314,6 +328,10 @@ class InspectionFormController extends GetxController {
           borderRadius: 12,
           duration: const Duration(seconds: 2),
         );
+        final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
+        if (savedLockedFields != null && savedLockedFields is List) {
+          apiFetchedLockedFields.assignAll(savedLockedFields.cast<String>());
+        }
         _syncScheduleWithChanges();
         isLoading.value = false;
         return;
@@ -923,6 +941,12 @@ class InspectionFormController extends GetxController {
     final imgMap = <String, dynamic>{};
     imageFiles.forEach((k, v) => imgMap[k] = v);
     await _storage.write(_snapshotImagesKey, imgMap);
+
+    // Persist locked fields so they remain read-only upon re-open
+    await _storage.write(
+      _snapshotLockedFieldsKey,
+      apiFetchedLockedFields.toList(),
+    );
   }
 
   // ─── Field Operations ───
@@ -953,8 +977,8 @@ class InspectionFormController extends GetxController {
       // Mark this key as user-edited
       _userEditedKeys.add(key);
 
-      // Sync changes to the list cards if make/model/variant changed
-      if (['make', 'model', 'variant'].contains(key)) {
+      // Sync changes to the list cards if important fields changed
+      if (['make', 'model', 'variant', 'customerName'].contains(key)) {
         _syncScheduleWithChanges();
       }
 
@@ -973,6 +997,7 @@ class InspectionFormController extends GetxController {
       make: data.data['make']?.toString(),
       model: data.data['model']?.toString(),
       variant: data.data['variant']?.toString(),
+      ownerName: data.data['customerName']?.toString(),
     );
   }
 
@@ -1327,8 +1352,56 @@ class InspectionFormController extends GetxController {
   }
 
   // ─── Navigation ───
+  /// Returns a list of labels for required fields that are not yet filled in the current section.
+  List<String> getUnfilledRequiredFields(int sectionIndex) {
+    if (sectionIndex < 0 || sectionIndex >= InspectionFieldDefs.sections.length)
+      return [];
+
+    final unFilled = <String>[];
+    final section = InspectionFieldDefs.sections[sectionIndex];
+
+    for (final field in section.fields) {
+      // Skip optional or readonly fields
+      if (field.optional || field.readonly) continue;
+
+      // Special check for image/video fields
+      if (field.type == FType.image || field.type == FType.video) {
+        final count = imageFiles[field.key]?.length ?? 0;
+        if (count < field.minImages) {
+          unFilled.add(field.label);
+        }
+      } else {
+        // Standard field check
+        final val = getFieldValue(field.key);
+        if (val.isEmpty || val == 'N/A') {
+          unFilled.add(field.label);
+        }
+      }
+    }
+    return unFilled;
+  }
+
+  // ─── Navigation ───
   void nextSection() {
     if (currentSectionIndex.value < sectionCount - 1) {
+      // ENFORCEMENT: Only move forward if current section is valid (starting from index 1: Front)
+      // We also enforce for index 0 if needed, but per request "from No: 2 front"
+      // If we want to allow going from 0 to 1 freely, we check index > 0.
+      if (currentSectionIndex.value >= 1) {
+        final missing = getUnfilledRequiredFields(currentSectionIndex.value);
+        if (missing.isNotEmpty) {
+          Get.snackbar(
+            'Incomplete Section',
+            'Please complete: ${missing.take(3).join(", ")}${missing.length > 3 ? "..." : ""}',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange.shade700,
+            colorText: Colors.white,
+            duration: const Duration(seconds: 3),
+          );
+          return;
+        }
+      }
+
       currentSectionIndex.value++;
       pageController.animateToPage(
         currentSectionIndex.value,
@@ -1350,6 +1423,27 @@ class InspectionFormController extends GetxController {
   }
 
   void jumpToSection(int index) {
+    // ENFORCEMENT: If moving forward, must pass validation of current and intermediary sections
+    if (index > currentSectionIndex.value && currentSectionIndex.value >= 1) {
+      // Loop through sections between current and target to ensure no skip
+      for (int i = currentSectionIndex.value; i < index; i++) {
+        final missing = getUnfilledRequiredFields(i);
+        if (missing.isNotEmpty) {
+          Get.snackbar(
+            'Section Incomplete',
+            'Please complete ${InspectionFieldDefs.sections[i].title} first.',
+            snackPosition: SnackPosition.BOTTOM,
+            backgroundColor: Colors.orange.shade700,
+            colorText: Colors.white,
+          );
+          // Jump to the first incomplete section instead? 
+          // For now, just block.
+          return;
+        }
+      }
+    }
+
+    // Moving backward is always allowed
     currentSectionIndex.value = index;
     pageController.jumpToPage(index);
   }
@@ -1433,7 +1527,7 @@ class InspectionFormController extends GetxController {
           colorText: Colors.white,
           margin: const EdgeInsets.all(12),
           borderRadius: 12,
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 2),
           icon: const Icon(Icons.check_circle_outline, color: Colors.white),
           shouldIconPulse: false,
         );
@@ -1509,6 +1603,8 @@ class InspectionFormController extends GetxController {
           'coDriverKneeAirbagImages': 'coDriverKneeSeatAirbag',
           'rhsRearSideAirbagImages': 'rhsRearSideAirbag',
           'lhsRearSideAirbagImages': 'lhsRearSideAirbag',
+          'spareWheelImages': 'spareWheel',
+          'spareTyreImages': 'spareTyre',
           'insuranceImages': 'insurance',
         };
 
@@ -1797,9 +1893,9 @@ class InspectionFormController extends GetxController {
         if (paths.isNotEmpty) {
           final resolvedUrls =
               paths.map((p) {
-                final cloudData = mediaCloudinaryData[p];
-                return cloudData?['url'] ?? p;
-              }).toList();
+                final url = mediaCloudinaryData[p]?['url'] ?? p;
+                return url.startsWith('http') ? url : '';
+              }).where((item) => item.isNotEmpty).toList();
           payload[key] = resolvedUrls;
         }
       });
@@ -1807,6 +1903,11 @@ class InspectionFormController extends GetxController {
       // 🔍 DEBUG: bootDoorImages after imageFiles overlay
       // debugPrint('🔍 payload[bootDoorImages] (after overlay) = ${payload['bootDoorImages']}');
 
+
+      // Ensure status is set to Inspected in the Car collection
+      payload['status'] = 'Inspected';
+      payload['inspectionStatus'] = 'Inspected';
+      
       // Ensure timestamp is set
       payload['timestamp'] = DateTime.now().toUtc().toIso8601String();
 
@@ -1897,9 +1998,11 @@ class InspectionFormController extends GetxController {
 
           final statusBody = {
             'telecallingId': schedule!.id,
+            'appointmentId': appointmentId,
             'changedBy': userId,
             'source': userRole,
             'inspectionStatus': 'Inspected',
+            'status': 'Inspected',
             'remarks': schedule!.remarks ?? '',
           };
 
@@ -1928,7 +2031,8 @@ class InspectionFormController extends GetxController {
         }
       } catch (e) {
         // debugPrint('⚠️ Failed to update telecalling status: $e');
-        // Don't block success if this fails — the car submission already succeeded
+        // Let user know but don't block success
+        TLoaders.customToast(message: "Car submitted, but failed to update lead status: $e");
       }
 
       // 7. Show stunning success dialog
@@ -2574,9 +2678,9 @@ class InspectionFormController extends GetxController {
         if (paths.isNotEmpty) {
           final resolvedUrls =
               paths.map((p) {
-                final cloudData = mediaCloudinaryData[p];
-                return cloudData?['url'] ?? p;
-              }).toList();
+                final url = mediaCloudinaryData[p]?['url'] ?? p;
+                return url.startsWith('http') ? url : '';
+              }).where((item) => item.isNotEmpty).toList();
           payload[key] = resolvedUrls;
         }
       });
@@ -2590,6 +2694,7 @@ class InspectionFormController extends GetxController {
       }
 
       // Set status to Inspected on successful Re-Inspection submit
+      payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
 
       // Keep the _id for the update API
@@ -2626,9 +2731,11 @@ class InspectionFormController extends GetxController {
 
           final statusBody = {
             'telecallingId': schedule!.id,
+            'appointmentId': appointmentId,
             'changedBy': userId,
             'source': userRole,
             'inspectionStatus': 'Inspected',
+            'status': 'Inspected',
             'remarks': schedule!.remarks ?? '',
           };
 
@@ -2657,7 +2764,7 @@ class InspectionFormController extends GetxController {
         }
       } catch (e) {
         // debugPrint('⚠️ Failed to update telecalling status: $e');
-        // Don't block success if this fails — the car update already succeeded
+        TLoaders.customToast(message: "Re-Inspection submitted, but lead status update failed: $e");
       }
 
       // 7. Show success dialog
@@ -3139,19 +3246,30 @@ class InspectionFormController extends GetxController {
       // ── Step 1: Fetch vehicle registration details ──
       final response = await ApiService.post(
         ApiConstants.fetchVehicleDetailsUrl,
-        {"vehicleRegistrationNumber": regNo, "userId": userId},
+        {"registrationNumber": regNo, "userId": userId},
       );
 
       // Access data.result as specified
-      final result = response['data']?['result'];
-      if (result != null && result is Map<String, dynamic>) {
-        _applyFetchedData(result);
-      } else {
+      final responseData = response['data'];
+      if (responseData == null || responseData is! Map<String, dynamic>) {
         throw 'No details found for this registration number.';
       }
 
-      // ── Step 2: Fetch Make/Model/Variant from telecalling API ──
-      await _fetchMakeModelVariantFromTelecalling();
+      final result = responseData['result'];
+      if (result != null && result is Map<String, dynamic>) {
+        _applyFetchedData(result);
+      }
+
+      // ── Auto-fill Make, Model, Variant from response data ──
+      _applyMakeModelVariantFromApi(responseData);
+
+      // ── Step 2: Fetch Make/Model/Variant from telecalling API (fallback) ──
+      // Only fetch from telecalling if make/model are not already filled by the API
+      final currentMake = getFieldValue('make');
+      final currentModel = getFieldValue('model');
+      if (currentMake.isEmpty || currentModel.isEmpty) {
+        await _fetchMakeModelVariantFromTelecalling();
+      }
 
       TLoaders.successSnackBar(
         title: 'Details Fetched',
@@ -3172,7 +3290,12 @@ class InspectionFormController extends GetxController {
       final userEmail = UserController.instance.user.value.email;
 
       // Try all relevant statuses to find the matching appointment
-      final statuses = ['Scheduled', 'Running', 'Re-Inspection', 'Re-Scheduled'];
+      final statuses = [
+        'Scheduled',
+        'Running',
+        'Re-Inspection',
+        'Re-Scheduled',
+      ];
 
       for (final status in statuses) {
         try {
@@ -3181,10 +3304,7 @@ class InspectionFormController extends GetxController {
               limit: 100,
               pageNumber: 1,
             ),
-            {
-              "inspectionStatus": status,
-              "allocatedTo": userEmail,
-            },
+            {"inspectionStatus": status, "allocatedTo": userEmail},
           );
 
           final List<dynamic> dataList = response['data'] ?? [];
@@ -3192,9 +3312,9 @@ class InspectionFormController extends GetxController {
             if (record is Map<String, dynamic> &&
                 record['appointmentId']?.toString() == appointmentId) {
               // Found the matching record — extract make/model/variant
-              final make = record['make']?.toString().trim() ?? '';
-              final model = record['model']?.toString().trim() ?? '';
-              final variant = record['variant']?.toString().trim() ?? '';
+              final make = (record['maker_name'] ?? record['make'] ?? '').toString().trim();
+              final model = (record['maker_model'] ?? record['model'] ?? '').toString().trim();
+              final variant = (record['variant_name'] ?? record['variant'] ?? record['series'] ?? '').toString().trim();
 
               final data = inspectionData.value;
               if (data != null) {
@@ -3202,16 +3322,19 @@ class InspectionFormController extends GetxController {
                   data.data['make'] = make;
                   data.make = make;
                   _userEditedKeys.add('make');
+                  apiFetchedLockedFields.add('make');
                 }
                 if (model.isNotEmpty) {
                   data.data['model'] = model;
                   data.model = model;
                   _userEditedKeys.add('model');
+                  apiFetchedLockedFields.add('model');
                 }
                 if (variant.isNotEmpty) {
                   data.data['variant'] = variant;
                   data.variant = variant;
                   _userEditedKeys.add('variant');
+                  apiFetchedLockedFields.add('variant');
                 }
                 _syncScheduleWithChanges();
                 inspectionData.refresh();
@@ -3227,6 +3350,86 @@ class InspectionFormController extends GetxController {
       // debugPrint('⚠️ Telecalling fetch for Make/Model/Variant failed: $e');
       // Non-critical: don't block the main flow
     }
+  }
+
+  /// Checks if a field was locked by the API fetch response (non-editable)
+  bool isFieldLockedByApi(String fieldKey) {
+    return apiFetchedLockedFields.contains(fieldKey);
+  }
+
+  /// Applies make, model, and variant from the new attestr API response.
+  /// Uses a robust case-insensitive search for keys and looks in both
+  /// responseData and result.
+  void _applyMakeModelVariantFromApi(Map<String, dynamic> responseData) {
+    final result = responseData['result'] as Map<String, dynamic>?;
+
+    // findIn helper: respects the order of targetKeys to allow prioritization
+    dynamic findIn(Map<String, dynamic> m, List<String> targetKeys) {
+      for (final tk in targetKeys) {
+        for (final entry in m.entries) {
+          if (entry.key.toLowerCase() == tk.toLowerCase()) {
+            final v = entry.value?.toString().trim() ?? '';
+            if (v.isNotEmpty) return v;
+          }
+        }
+      }
+      return null;
+    }
+
+    // Try target keys in order of descriptive preference
+    final makeVal =
+        findIn(responseData, ['maker_name', 'make', 'maker']) ??
+        (result != null
+            ? findIn(result, ['maker_name', 'make', 'maker'])
+            : null) ??
+        '';
+
+    final modelVal =
+        findIn(responseData, ['maker_model', 'model', 'model_name']) ??
+        (result != null
+            ? findIn(result, ['maker_model', 'model', 'model_name'])
+            : null) ??
+        '';
+
+    final variantVal =
+        findIn(responseData, ['variant', 'series', 'variant_name']) ??
+        (result != null
+            ? findIn(result, ['variant', 'series', 'variant_name'])
+            : null) ??
+        '';
+
+    final data = inspectionData.value;
+    if (data == null) return;
+
+    // Clear any previously locked fields from a prior fetch
+    apiFetchedLockedFields.remove('make');
+    apiFetchedLockedFields.remove('model');
+    apiFetchedLockedFields.remove('variant');
+
+    if (makeVal.isNotEmpty) {
+      data.data['make'] = makeVal;
+      data.make = makeVal;
+      _userEditedKeys.add('make');
+      apiFetchedLockedFields.add('make');
+    }
+
+    if (modelVal.isNotEmpty) {
+      data.data['model'] = modelVal;
+      data.model = modelVal;
+      _userEditedKeys.add('model');
+      apiFetchedLockedFields.add('model');
+    }
+
+    if (variantVal.isNotEmpty) {
+      data.data['variant'] = variantVal;
+      data.variant = variantVal;
+      _userEditedKeys.add('variant');
+      apiFetchedLockedFields.add('variant');
+    }
+    // If variant is not available, it remains editable (not locked)
+
+    _syncScheduleWithChanges();
+    inspectionData.refresh();
   }
 
   void _applyFetchedData(Map<String, dynamic> result) {
@@ -3360,10 +3563,12 @@ class InspectionFormController extends GetxController {
         updateField('fuelType', matched);
       } else {
         // If no match, add it temporarily to the dropdown options
-        final existingOptions = dropdownOptions['fuelType'] ?? [
-          'Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid', 'LPG',
-        ];
-        if (!existingOptions.any((o) => o.toLowerCase() == formattedFuel.toLowerCase())) {
+        final existingOptions =
+            dropdownOptions['fuelType'] ??
+            ['Petrol', 'Diesel', 'CNG', 'Electric', 'Hybrid', 'LPG'];
+        if (!existingOptions.any(
+          (o) => o.toLowerCase() == formattedFuel.toLowerCase(),
+        )) {
           dropdownOptions['fuelType'] = [...existingOptions, formattedFuel];
         }
         updateField('fuelType', formattedFuel);
@@ -3383,10 +3588,11 @@ class InspectionFormController extends GetxController {
         updateField('rcStatus', matched);
       } else {
         // If no match, add it temporarily to the dropdown options
-        final existingOptions = dropdownOptions['rcStatus'] ?? [
-          'Active', 'Inactive', 'Suspended',
-        ];
-        if (!existingOptions.any((o) => o.toLowerCase() == formattedStatus.toLowerCase())) {
+        final existingOptions =
+            dropdownOptions['rcStatus'] ?? ['Active', 'Inactive', 'Suspended'];
+        if (!existingOptions.any(
+          (o) => o.toLowerCase() == formattedStatus.toLowerCase(),
+        )) {
           dropdownOptions['rcStatus'] = [...existingOptions, formattedStatus];
         }
         updateField('rcStatus', formattedStatus);
@@ -3394,45 +3600,8 @@ class InspectionFormController extends GetxController {
       updatedAny = true;
     }
 
-    // ── 4. Make / Model / Variant: Use API values first, then schedule as fallback ──
-    final rawMake = find(['make', 'maker', 'maker_name']);
-    final rawModel = find(['model', 'maker_model']);
-    final rawVariant = find(['variant', 'series']);
+    // Note: Make / Model / Variant are now handled by _applyMakeModelVariantFromApi()
 
-    final makeVal = rawMake?.toString().trim() ?? '';
-    final modelVal = rawModel?.toString().trim() ?? '';
-    final variantVal = rawVariant?.toString().trim() ?? '';
-
-    // Use API values; if empty, fall back to schedule data
-    final finalMake = makeVal.isNotEmpty ? makeVal : (schedule?.make ?? '');
-    final finalModel = modelVal.isNotEmpty ? modelVal : (schedule?.model ?? '');
-    final finalVariant = variantVal.isNotEmpty ? variantVal : (schedule?.variant ?? '');
-
-    if (finalMake.isNotEmpty) {
-      // Set make first (without clearing model/variant via updateField),
-      // then model, then variant — in order.
-      final data = inspectionData.value;
-      if (data != null) {
-        data.data['make'] = finalMake;
-        data.make = finalMake;
-        _userEditedKeys.add('make');
-
-        if (finalModel.isNotEmpty) {
-          data.data['model'] = finalModel;
-          data.model = finalModel;
-          _userEditedKeys.add('model');
-        }
-
-        if (finalVariant.isNotEmpty) {
-          data.data['variant'] = finalVariant;
-          data.variant = finalVariant;
-          _userEditedKeys.add('variant');
-        }
-
-        _syncScheduleWithChanges();
-        updatedAny = true;
-      }
-    }
 
     if (updatedAny) {
       inspectionData.refresh();

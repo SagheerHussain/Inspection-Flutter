@@ -82,7 +82,7 @@ InputDecoration _styledDecoration({
         text: label,
         style: TextStyle(
           color: isFilled ? const Color(0xFF047857) : Colors.grey.shade600,
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: isFilled ? FontWeight.w600 : FontWeight.normal,
         ),
         children: [
@@ -91,7 +91,7 @@ InputDecoration _styledDecoration({
               text: isFilled ? ' ✓' : ' *',
               style: TextStyle(
                 color: isFilled ? const Color(0xFF047857) : Colors.red,
-                fontSize: 14,
+                fontSize: 19,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -633,6 +633,8 @@ class _SectionPageState extends State<_SectionPage> {
           controller: widget.controller,
           field: field,
         );
+      case FType.dateTime:
+        return _BoundDateTimeField(controller: widget.controller, field: field);
     }
   }
 }
@@ -1016,6 +1018,131 @@ class _BoundDateField extends StatelessWidget {
                           : Colors.grey.shade400,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+class _BoundDateTimeField extends StatelessWidget {
+  final InspectionFormController controller;
+  final F field;
+  const _BoundDateTimeField({required this.controller, required this.field});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final rawValue = controller.getFieldValue(field.key);
+      String displayText = '';
+      DateTime? currentDate;
+
+      if (rawValue.isNotEmpty) {
+        currentDate = DateTime.tryParse(rawValue);
+        if (currentDate != null) {
+          final d = currentDate.toLocal();
+          final hour = d.hour > 12 ? d.hour - 12 : (d.hour == 0 ? 12 : d.hour);
+          final period = d.hour >= 12 ? 'PM' : 'AM';
+          final minute = d.minute.toString().padLeft(2, '0');
+          displayText =
+              '${d.day.toString().padLeft(2, '0')}-${d.month.toString().padLeft(2, '0')}-${d.year}, ${hour.toString().padLeft(2, '0')}:$minute $period';
+        }
+      }
+
+      final isFilled = displayText.isNotEmpty;
+
+      return _fieldWrapper(
+        isFilled: isFilled,
+        child: Material(
+          color: isFilled ? _filledBg : _emptyBg,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () async {
+              final now = DateTime.now();
+              final datePicked = await showDatePicker(
+                context: context,
+                initialDate: currentDate ?? now,
+                firstDate: DateTime(1990),
+                lastDate: DateTime(2040),
+                builder: (ctx, child) {
+                  return Theme(
+                    data: Theme.of(ctx).copyWith(
+                      colorScheme: const ColorScheme.light(
+                        primary: _accent,
+                        onPrimary: Colors.white,
+                        surface: Colors.white,
+                        onSurface: Color(0xFF1E293B),
+                      ),
+                    ),
+                    child: child!,
+                  );
+                },
+              );
+
+              if (datePicked != null) {
+                final timePicked = await showTimePicker(
+                  context: context,
+                  initialTime: TimeOfDay.fromDateTime(currentDate ?? now),
+                  builder: (ctx, child) {
+                    return Theme(
+                      data: Theme.of(ctx).copyWith(
+                        colorScheme: const ColorScheme.light(
+                          primary: _accent,
+                          onPrimary: Colors.white,
+                          surface: Colors.white,
+                          onSurface: Color(0xFF1E293B),
+                        ),
+                      ),
+                      child: child!,
+                    );
+                  },
+                );
+
+                if (timePicked != null) {
+                  final finalDateTime = DateTime(
+                    datePicked.year,
+                    datePicked.month,
+                    datePicked.day,
+                    timePicked.hour,
+                    timePicked.minute,
+                  );
+                  controller.updateField(
+                    field.key,
+                    finalDateTime.toIso8601String(),
+                  );
+                }
+              }
+            },
+            child: InputDecorator(
+              decoration: _styledDecoration(
+                label: field.label,
+                isOptional: field.optional,
+                isFilled: isFilled,
+                prefixIcon: Icon(
+                  Icons.event_available_rounded,
+                  size: 18,
+                  color:
+                      isFilled
+                          ? _filledGreen.withValues(alpha: 0.7)
+                          : _accent.withValues(alpha: 0.6),
+                ),
+                suffixIcon: Icon(
+                  Icons.arrow_drop_down_circle_outlined,
+                  size: 20,
+                  color: Colors.grey.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Text(
+                isFilled ? displayText : 'Select Date & Time',
+                style: TextStyle(
+                  color:
+                      isFilled ? const Color(0xFF1E293B) : Colors.grey.shade400,
+                  fontSize: 14,
+                  fontWeight: isFilled ? FontWeight.w600 : FontWeight.w500,
                 ),
               ),
             ),
@@ -1515,7 +1642,7 @@ class _BoundImagePicker extends StatelessWidget {
                     text: TextSpan(
                       text: field.label,
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: 14.5,
                         fontWeight: FontWeight.w600,
                         color: Colors.grey.shade700,
                       ),
@@ -1525,7 +1652,7 @@ class _BoundImagePicker extends StatelessWidget {
                             text: ' *',
                             style: TextStyle(
                               color: Colors.red,
-                              fontSize: 14,
+                              fontSize: 15.5,
                               fontWeight: FontWeight.bold,
                             ),
                           ),
@@ -1618,7 +1745,7 @@ class _BoundImagePicker extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   field.label,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
+                  style: TextStyle(fontSize: 14.5, color: Colors.grey.shade500),
                 ),
                 const SizedBox(height: 24),
                 Row(
@@ -1741,7 +1868,7 @@ class _PickerOption extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: 14.5,
                 fontWeight: FontWeight.w600,
                 color: Colors.grey.shade700,
               ),
@@ -2448,7 +2575,7 @@ class _FooterButton extends StatelessWidget {
                   style: TextStyle(
                     color: effectiveColor,
                     fontWeight: FontWeight.w600,
-                    fontSize: 13,
+                    fontSize: 14.5,
                   ),
                 ),
               ],
@@ -2460,7 +2587,7 @@ class _FooterButton extends StatelessWidget {
   }
 }
 
-class _BoundSearchableDropdown extends StatelessWidget {
+class _BoundSearchableDropdown extends StatefulWidget {
   final InspectionFormController controller;
   final F field;
 
@@ -2470,178 +2597,262 @@ class _BoundSearchableDropdown extends StatelessWidget {
   });
 
   @override
+  State<_BoundSearchableDropdown> createState() =>
+      _BoundSearchableDropdownState();
+}
+
+class _BoundSearchableDropdownState extends State<_BoundSearchableDropdown> {
+  @override
   Widget build(BuildContext context) {
     return Obx(() {
-      final value = controller.getFieldValue(field.key);
+      final value = widget.controller.getFieldValue(widget.field.key);
       final isFilled = value.isNotEmpty;
-      final make = controller.getFieldValue('make');
-      final model = controller.getFieldValue('model');
+      final make = widget.controller.getFieldValue('make');
+      final model = widget.controller.getFieldValue('model');
+
+      // Explicitly touch the RxSet so Obx re-renders when it changes
+      final lockedFields = widget.controller.apiFetchedLockedFields.toSet();
+      final isLockedByApi = lockedFields.contains(widget.field.key);
 
       bool isDependencyMissing = false;
       String? missingDependencyLabel;
 
-      if (field.key == 'model' && make.isEmpty) {
-        isDependencyMissing = true;
-        missingDependencyLabel = 'Make';
-      } else if (field.key == 'variant' && (make.isEmpty || model.isEmpty)) {
-        isDependencyMissing = true;
-        missingDependencyLabel = model.isEmpty ? 'Model' : 'Make';
+      if (!isLockedByApi) {
+        if (widget.field.key == 'model' && make.isEmpty) {
+          isDependencyMissing = true;
+          missingDependencyLabel = 'Make';
+        } else if (widget.field.key == 'variant' &&
+            (make.isEmpty || model.isEmpty)) {
+          isDependencyMissing = true;
+          missingDependencyLabel = model.isEmpty ? 'Model' : 'Make';
+        }
       }
 
-      return _fieldWrapper(
-        isFilled: isFilled,
-        child: Autocomplete<String>(
-          key: ValueKey(
-            '${field.key}_${make}_${model}',
-          ), // Force reset when dependencies change
-          initialValue: TextEditingValue(text: value),
-          optionsBuilder: (TextEditingValue textEditingValue) async {
-            if (isDependencyMissing) return const Iterable<String>.empty();
+      // Use a key to force the widget tree to fully swap when lock state toggles
+      return KeyedSubtree(
+        key: ValueKey('${widget.field.key}_locked_$isLockedByApi'),
+        child: _fieldWrapper(
+          isFilled: isFilled,
+          child: isLockedByApi
+              // ── LOCKED: completely disabled read-only field ──
+              ? AbsorbPointer(
+                  absorbing: true,
+                  child: TextFormField(
+                    initialValue: value,
+                    enabled: false,
+                    readOnly: true,
+                    style: const TextStyle(
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    decoration: InputDecoration(
+                      labelText: widget.field.label,
+                      labelStyle: const TextStyle(
+                        color: _filledGreen,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      filled: true,
+                      fillColor: _filledBg,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 16,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _filledBorder),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _filledBorder),
+                      ),
+                      disabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: _filledBorder),
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.lock_outline,
+                        size: 20,
+                        color: _filledGreen,
+                      ),
+                      suffixIcon: const Tooltip(
+                        message: 'Auto-filled from registration details',
+                        child: Icon(
+                          Icons.verified_rounded,
+                          size: 20,
+                          color: _filledGreen,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              // ── UNLOCKED: normal searchable dropdown ──
+              : Autocomplete<String>(
+                  key: ValueKey('${widget.field.key}_${make}_$model'),
+                  initialValue: TextEditingValue(text: value),
+                  optionsBuilder: (TextEditingValue textEditingValue) async {
+                    if (isDependencyMissing) {
+                      return const Iterable<String>.empty();
+                    }
+                    final query = textEditingValue.text;
+                    if (widget.field.key == 'make') {
+                      return await widget.controller.searchMakes(query);
+                    } else if (widget.field.key == 'model') {
+                      return await widget.controller.searchModels(query);
+                    } else if (widget.field.key == 'variant') {
+                      return await widget.controller.searchVariants(query);
+                    }
+                    return const Iterable<String>.empty();
+                  },
+                  onSelected: (String selection) {
+                    widget.controller.updateField(widget.field.key, selection);
+                  },
+                  fieldViewBuilder: (
+                    context,
+                    textEditingController,
+                    focusNode,
+                    onFieldSubmitted,
+                  ) {
+                    if (textEditingController.text != value &&
+                        !focusNode.hasFocus) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted) textEditingController.text = value;
+                      });
+                    }
 
-            final query = textEditingValue.text;
-            if (field.key == 'make') {
-              return await controller.searchMakes(query);
-            } else if (field.key == 'model') {
-              return await controller.searchModels(query);
-            } else if (field.key == 'variant') {
-              return await controller.searchVariants(query);
-            }
-            return const Iterable<String>.empty();
-          },
-          onSelected: (String selection) {
-            controller.updateField(field.key, selection);
-          },
-          fieldViewBuilder: (
-            context,
-            textEditingController,
-            focusNode,
-            onFieldSubmitted,
-          ) {
-            // Sync with controller value if changed externally (Fetch)
-            if (textEditingController.text != value && !focusNode.hasFocus) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                textEditingController.text = value;
-              });
-            }
-
-            return TextFormField(
-              controller: textEditingController,
-              focusNode: focusNode,
-              enabled: !isDependencyMissing,
-              readOnly: isDependencyMissing,
-              style: TextStyle(
-                color: isDependencyMissing ? Colors.grey : Colors.black87,
-              ),
-              decoration: InputDecoration(
-                labelText: field.label,
-                labelStyle: TextStyle(
-                  color:
-                      isDependencyMissing
-                          ? Colors.grey.shade400
-                          : (isFilled ? _filledGreen : Colors.grey.shade600),
-                  fontWeight: FontWeight.w600,
-                ),
-                hintText:
-                    isDependencyMissing
-                        ? 'Select $missingDependencyLabel first'
-                        : 'Select ${field.label.toLowerCase()}',
-                filled: true,
-                fillColor:
-                    isDependencyMissing
-                        ? Colors.grey.shade50
-                        : (isFilled ? _filledBg : Colors.white),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 16,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color:
-                        isDependencyMissing
-                            ? Colors.grey.shade200
-                            : (isFilled ? _filledBorder : Colors.grey.shade300),
-                  ),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(
-                    color:
-                        isDependencyMissing
-                            ? Colors.grey.shade200
-                            : (isFilled ? _filledBorder : Colors.grey.shade300),
-                  ),
-                ),
-                disabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.grey.shade200),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: _accent, width: 2),
-                ),
-                prefixIcon: Icon(
-                  isDependencyMissing ? Icons.lock_outline : Icons.search,
-                  size: 20,
-                  color: isDependencyMissing ? Colors.grey : _accent,
-                ),
-                suffixIcon:
-                    textEditingController.text.isNotEmpty
-                        ? IconButton(
-                          icon: const Icon(Icons.clear, size: 18),
-                          onPressed: () {
-                            textEditingController.clear();
-                            controller.updateField(field.key, '');
-                          },
-                        )
-                        : const Icon(Icons.arrow_drop_down, color: Colors.grey),
-              ),
-              onFieldSubmitted: (v) => onFieldSubmitted(),
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 8,
-                borderRadius: BorderRadius.circular(12),
-                shadowColor: Colors.black.withValues(alpha: 0.2),
-                child: Container(
-                  width: MediaQuery.of(context).size.width - 48,
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  constraints: const BoxConstraints(maxHeight: 250),
-                  child: ListView.separated(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    separatorBuilder:
-                        (context, index) =>
-                            Divider(height: 1, color: Colors.grey.shade100),
-                    itemBuilder: (BuildContext context, int index) {
-                      final String option = options.elementAt(index);
-                      return ListTile(
-                        dense: true,
-                        title: Text(
-                          option,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1E293B),
+                    return TextFormField(
+                      controller: textEditingController,
+                      focusNode: focusNode,
+                      enabled: !isDependencyMissing,
+                      readOnly: isDependencyMissing,
+                      style: TextStyle(
+                        color:
+                            isDependencyMissing ? Colors.grey : Colors.black87,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: widget.field.label,
+                        labelStyle: TextStyle(
+                          color:
+                              isDependencyMissing
+                                  ? Colors.grey.shade400
+                                  : (isFilled
+                                      ? _filledGreen
+                                      : Colors.grey.shade600),
+                          fontWeight: FontWeight.w600,
+                        ),
+                        hintText:
+                            isDependencyMissing
+                                ? 'Select $missingDependencyLabel first'
+                                : 'Select ${widget.field.label.toLowerCase()}',
+                        filled: true,
+                        fillColor:
+                            isDependencyMissing
+                                ? Colors.grey.shade50
+                                : (isFilled ? _filledBg : Colors.white),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 16,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDependencyMissing
+                                    ? Colors.grey.shade200
+                                    : (isFilled
+                                        ? _filledBorder
+                                        : Colors.grey.shade300),
                           ),
                         ),
-                        onTap: () => onSelected(option),
-                      );
-                    },
-                  ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color:
+                                isDependencyMissing
+                                    ? Colors.grey.shade200
+                                    : (isFilled
+                                        ? _filledBorder
+                                        : Colors.grey.shade300),
+                          ),
+                        ),
+                        disabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade200),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: _accent, width: 2),
+                        ),
+                        prefixIcon: Icon(
+                          isDependencyMissing
+                              ? Icons.lock_outline
+                              : Icons.search,
+                          size: 20,
+                          color: isDependencyMissing ? Colors.grey : _accent,
+                        ),
+                        suffixIcon:
+                            textEditingController.text.isNotEmpty
+                                ? IconButton(
+                                    icon: const Icon(Icons.clear, size: 18),
+                                    onPressed: () {
+                                      textEditingController.clear();
+                                      widget.controller
+                                          .updateField(widget.field.key, '');
+                                    },
+                                  )
+                                : const Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Colors.grey,
+                                  ),
+                      ),
+                      onFieldSubmitted: (v) => onFieldSubmitted(),
+                    );
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 8,
+                        borderRadius: BorderRadius.circular(12),
+                        shadowColor: Colors.black.withValues(alpha: 0.2),
+                        child: Container(
+                          width: MediaQuery.of(context).size.width - 48,
+                          margin: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.grey.shade200),
+                          ),
+                          constraints: const BoxConstraints(maxHeight: 250),
+                          child: ListView.separated(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            separatorBuilder:
+                                (context, index) => Divider(
+                                  height: 1,
+                                  color: Colors.grey.shade100,
+                                ),
+                            itemBuilder: (BuildContext context, int index) {
+                              final String option = options.elementAt(index);
+                              return ListTile(
+                                dense: true,
+                                title: Text(
+                                  option,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                    color: Color(0xFF1E293B),
+                                  ),
+                                ),
+                                onTap: () => onSelected(option),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-              ),
-            );
-          },
         ),
       );
     });
