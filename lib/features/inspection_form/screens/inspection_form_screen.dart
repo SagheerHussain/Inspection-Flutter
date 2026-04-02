@@ -551,7 +551,8 @@ class _SectionPageState extends State<_SectionPage> {
                     return const SizedBox.shrink();
                   }
                 } else if (field.key == 'hypothecatedTo') {
-                  if (parentVal == 'Not Hypothecated' || parentVal == 'No') {
+                  final v = parentVal.trim().toLowerCase();
+                  if (v == 'no' || v == 'not hypothecated' || v.isEmpty) {
                     return const SizedBox.shrink();
                   }
                 } else {

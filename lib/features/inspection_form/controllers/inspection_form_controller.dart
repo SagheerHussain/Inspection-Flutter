@@ -18,6 +18,7 @@ import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../schedules/controllers/schedule_controller.dart';
 import '../../../data/repository/authentication_repository/authentication_repository.dart';
+import '../screens/image_editor_screen.dart';
 
 class InspectionFormController extends GetxController {
   final String appointmentId;
@@ -1046,13 +1047,18 @@ class InspectionFormController extends GetxController {
         maxHeight: 1080,
       );
       if (picked != null) {
-        final currentList = imageFiles[key] ?? [];
-        currentList.add(picked.path);
-        imageFiles[key] = List.from(currentList);
-        imageFiles.refresh();
+        // Navigation to ImageEditorScreen (Manual Blur & Watermarking)
+        final String? editedPath = await Get.to(() => ImageEditorScreen(imagePath: picked.path));
+        
+        if (editedPath != null && editedPath.isNotEmpty) {
+          final currentList = imageFiles[key] ?? [];
+          currentList.add(editedPath);
+          imageFiles[key] = List.from(currentList);
+          imageFiles.refresh();
 
-        // Trigger Upload
-        _uploadMedia(key, picked.path, isVideo: false);
+          // Trigger Upload with Edited File
+          _uploadMedia(key, editedPath, isVideo: false);
+        }
       }
     } catch (e) {
       Get.snackbar(
@@ -3322,19 +3328,16 @@ class InspectionFormController extends GetxController {
                   data.data['make'] = make;
                   data.make = make;
                   _userEditedKeys.add('make');
-                  apiFetchedLockedFields.add('make');
                 }
                 if (model.isNotEmpty) {
                   data.data['model'] = model;
                   data.model = model;
                   _userEditedKeys.add('model');
-                  apiFetchedLockedFields.add('model');
                 }
                 if (variant.isNotEmpty) {
                   data.data['variant'] = variant;
                   data.variant = variant;
                   _userEditedKeys.add('variant');
-                  apiFetchedLockedFields.add('variant');
                 }
                 _syncScheduleWithChanges();
                 inspectionData.refresh();
@@ -3410,21 +3413,18 @@ class InspectionFormController extends GetxController {
       data.data['make'] = makeVal;
       data.make = makeVal;
       _userEditedKeys.add('make');
-      apiFetchedLockedFields.add('make');
     }
 
     if (modelVal.isNotEmpty) {
       data.data['model'] = modelVal;
       data.model = modelVal;
       _userEditedKeys.add('model');
-      apiFetchedLockedFields.add('model');
     }
 
     if (variantVal.isNotEmpty) {
       data.data['variant'] = variantVal;
       data.variant = variantVal;
       _userEditedKeys.add('variant');
-      apiFetchedLockedFields.add('variant');
     }
     // If variant is not available, it remains editable (not locked)
 
@@ -3515,11 +3515,6 @@ class InspectionFormController extends GetxController {
       ],
       'pucValidity': ['pollutionCertificateUpto', 'puc_upto', 'puc_validity'],
       'pucNumber': ['pollutionCertificateNumber', 'puc_number', 'pucNo'],
-      'blacklistStatus': [
-        'blacklistStatus',
-        'is_blacklisted',
-        'blacklist_details',
-      ],
       'city': ['city', 'city_name'],
       'taxValidTill': ['taxUpto', 'tax_validity', 'tax_paid_upto', 'tax_upto'],
     };
@@ -3532,6 +3527,45 @@ class InspectionFormController extends GetxController {
         updatedAny = true;
       }
     });
+
+    // ── Blacklist Status: Boolean/String → "Yes"/"No" ──
+    final blacklistValue = find(['blacklistStatus', 'is_blacklisted', 'blacklist_details']);
+    if (blacklistValue != null) {
+      final isBlacklisted = (blacklistValue == true || 
+                             blacklistValue.toString().toLowerCase() == 'true' ||
+                             blacklistValue.toString() == '1' ||
+                             blacklistValue.toString().toLowerCase() == 'yes');
+      
+      updateField('blacklistStatus', isBlacklisted ? 'Yes' : 'No');
+      updatedAny = true;
+    } else {
+      // Default to No if return null
+      updateField('blacklistStatus', 'No');
+      updatedAny = true;
+    }
+
+    // ── 0. Hypothecation Details: boolean 'financed' → "Yes"/"No" ──
+    final financedValue = find(['financed', 'is_financed', 'hypothecated']);
+    if (financedValue != null) {
+      final isFinanced = (financedValue == true || 
+                          financedValue.toString().toLowerCase() == 'true' ||
+                          financedValue.toString() == '1' ||
+                          financedValue.toString().toLowerCase() == 'yes');
+      
+      final hypothecationValue = isFinanced ? 'Yes' : 'No';
+      updateField('hypothecationDetails', hypothecationValue);
+      updatedAny = true;
+
+      // If "Yes", fill 'hypothecatedTo' from 'lender'
+      if (isFinanced) {
+        final lenderValue = find(['lender', 'financed_to', 'hypothecated_to']);
+        if (lenderValue != null) {
+          updateField('hypothecatedTo', lenderValue.toString());
+        }
+      } else {
+        updateField('hypothecatedTo', ''); // Clear if No
+      }
+    }
 
     // ── 1. Registration State: Extract from rto value ──
     // e.g. "PVD KOLKATA, West Bengal" → "West Bengal"

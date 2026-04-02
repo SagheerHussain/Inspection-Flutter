@@ -140,7 +140,7 @@ class InspectionFieldDefs {
       icon: Icons.description,
       fields: [
         F.text('appointmentId', 'Appointment ID', readonly: true),
-        F.text('city', 'City', readonly: true),
+        F.text('city', 'City'),
         F.text('registrationNumber', 'Registration Number'),
         F.drop('toBeScrapped', 'To Be Scrapped', ['Yes', 'No']),
         F.multi('chassisDetails', 'Chassis Details', []),
@@ -180,7 +180,7 @@ class InspectionFieldDefs {
         F.num('seatingCapacity', 'Seating Capacity'),
         F.text('color', 'Color'),
         F.num('cubicCapacity', 'Cubic Capacity'),
-        F.drop('norms', 'Norms', ['BS4', 'BS6', 'BS3']),
+        F.text('norms', 'Norms'),
         F.text('registrationState', 'Registration State'),
         F.text('registeredRto', 'Registered RTO'),
         F.num('ownerSerialNumber', 'Ownership Serial No'),
@@ -200,11 +200,7 @@ class InspectionFieldDefs {
         ]),
         F.date('taxValidTill', 'Tax Valid Till'),
         F.img('roadTaxImages', 'Road Tax Image', minImages: 1),
-        F.drop('hypothecationDetails', 'Hypothecation Details', [
-          'No',
-          'Yes',
-          'Not Hypothecated',
-        ]),
+        F.text('hypothecationDetails', 'Hypothecation Details'),
         F.text('hypothecatedTo', 'Hypothecated To'),
         F.drop('insurance', 'Insurance Type', [
           'Comprehensive',
@@ -221,10 +217,7 @@ class InspectionFieldDefs {
         F.text('pucNumber', 'PUC Number'),
         F.img('pucImages', 'PUC Image', optional: true),
         F.drop('rcStatus', 'RC Status', ['Active', 'Inactive', 'Suspended']),
-        F.drop('blacklistStatus', 'Blacklist Status', [
-          'Applicable',
-          'Blacklisted',
-        ]),
+        F.text('blacklistStatus', 'Blacklist Status'),
         F.drop('rtoNoc', 'RTO NOC Details', [
           'Required',
           'Not Required',

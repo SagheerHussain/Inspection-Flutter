@@ -2,7 +2,7 @@ name: inspection_app
 description: "Otobix InspectionApp - Vehicle inspection management."
 publish_to: 'none'
 
-version: 1.0.0+22
+version: 1.0.0+23
 
 environment:
   sdk: ^3.7.2
@@ -66,6 +66,7 @@ dependencies:
   video_player: ^2.10.1
   video_compress: ^3.1.4
   app_links: ^6.4.1
+  path_provider: ^2.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -79,6 +80,7 @@ flutter:
   assets:
     - assets/logo/
     - assets/images/
+    - assets/images/Watermark/
     - assets/icons/brands/
     - assets/images/profile/
     - assets/images/dashboard/
