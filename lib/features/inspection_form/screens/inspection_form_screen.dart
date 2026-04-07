@@ -498,6 +498,8 @@ class _SectionPageState extends State<_SectionPage> {
           ),
           const SizedBox(height: 20),
           ...widget.section.fields.map((field) {
+            if (field.key == 'inspectionDate') return const SizedBox.shrink();
+
             // Define fields that have dynamic visibility
             final visibilityParents = {
               'rcCondition': 'rcBookAvailability',
@@ -790,6 +792,10 @@ class _BoundTextFieldState extends State<_BoundTextField> {
 
       final isFilled = value.isNotEmpty;
 
+      final isLocked =
+          widget.field.readonly ||
+          widget.controller.isFieldLockedByApi(widget.field.key);
+
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
         child: Row(
@@ -802,7 +808,7 @@ class _BoundTextFieldState extends State<_BoundTextField> {
                 child: TextFormField(
                   controller: _textController,
                   maxLines: widget.field.maxLines,
-                  readOnly: widget.field.readonly,
+                  readOnly: isLocked,
                   onChanged:
                       (v) => widget.controller.updateField(widget.field.key, v),
                   style: const TextStyle(
@@ -815,7 +821,7 @@ class _BoundTextFieldState extends State<_BoundTextField> {
                     isOptional: widget.field.optional,
                     isFilled: isFilled,
                     suffixIcon:
-                        widget.field.readonly
+                        isLocked
                             ? Icon(
                               Icons.lock_outline,
                               size: 18,
@@ -965,6 +971,8 @@ class _BoundDateField extends StatelessWidget {
       }
 
       final isFilled = displayText.isNotEmpty;
+      final isLocked =
+          field.readonly || controller.isFieldLockedByApi(field.key);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -973,42 +981,55 @@ class _BoundDateField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () async {
-              final now = DateTime.now();
-              final picked = await showDatePicker(
-                context: context,
-                initialDate: currentDate ?? now,
-                firstDate: DateTime(1990),
-                lastDate: DateTime(2040),
-                builder: (ctx, child) {
-                  return Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.light(
-                        primary: _accent,
-                        onPrimary: Colors.white,
-                        surface: Colors.white,
-                        onSurface: Color(0xFF1E293B),
-                      ),
-                    ),
-                    child: child!,
-                  );
-                },
-              );
+            onTap:
+                isLocked
+                    ? null
+                    : () async {
+                      final now = DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: currentDate ?? now,
+                        firstDate: DateTime(1990),
+                        lastDate: DateTime(2040),
+                        builder: (ctx, child) {
+                          return Theme(
+                            data: Theme.of(ctx).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: _accent,
+                                onPrimary: Colors.white,
+                                surface: Colors.white,
+                                onSurface: Color(0xFF1E293B),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
 
-              if (picked != null) {
-                controller.updateField(field.key, picked.toIso8601String());
-              }
-            },
+                      if (picked != null) {
+                        controller.updateField(
+                          field.key,
+                          picked.toIso8601String(),
+                        );
+                      }
+                    },
             child: InputDecorator(
               decoration: _styledDecoration(
                 label: field.label,
                 isOptional: field.optional,
                 isFilled: isFilled,
-                suffixIcon: Icon(
-                  Icons.calendar_today_rounded,
-                  color: isFilled ? _filledGreen : _accent,
-                  size: 20,
-                ),
+                suffixIcon:
+                    isLocked
+                        ? Icon(
+                          Icons.lock_outline,
+                          size: 18,
+                          color: Colors.grey.shade400,
+                        )
+                        : Icon(
+                          Icons.calendar_today_rounded,
+                          color: isFilled ? _filledGreen : _accent,
+                          size: 20,
+                        ),
               ),
               child: Text(
                 displayText.isNotEmpty ? displayText : 'Select date',
@@ -1054,6 +1075,8 @@ class _BoundDateTimeField extends StatelessWidget {
       }
 
       final isFilled = displayText.isNotEmpty;
+      final isLocked =
+          field.readonly || controller.isFieldLockedByApi(field.key);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -1062,62 +1085,67 @@ class _BoundDateTimeField extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () async {
-              final now = DateTime.now();
-              final datePicked = await showDatePicker(
-                context: context,
-                initialDate: currentDate ?? now,
-                firstDate: DateTime(1990),
-                lastDate: DateTime(2040),
-                builder: (ctx, child) {
-                  return Theme(
-                    data: Theme.of(ctx).copyWith(
-                      colorScheme: const ColorScheme.light(
-                        primary: _accent,
-                        onPrimary: Colors.white,
-                        surface: Colors.white,
-                        onSurface: Color(0xFF1E293B),
-                      ),
-                    ),
-                    child: child!,
-                  );
-                },
-              );
+            onTap:
+                isLocked
+                    ? null
+                    : () async {
+                      final now = DateTime.now();
+                      final datePicked = await showDatePicker(
+                        context: context,
+                        initialDate: currentDate ?? now,
+                        firstDate: DateTime(1990),
+                        lastDate: DateTime(2040),
+                        builder: (ctx, child) {
+                          return Theme(
+                            data: Theme.of(ctx).copyWith(
+                              colorScheme: const ColorScheme.light(
+                                primary: _accent,
+                                onPrimary: Colors.white,
+                                surface: Colors.white,
+                                onSurface: Color(0xFF1E293B),
+                              ),
+                            ),
+                            child: child!,
+                          );
+                        },
+                      );
 
-              if (datePicked != null) {
-                final timePicked = await showTimePicker(
-                  context: context,
-                  initialTime: TimeOfDay.fromDateTime(currentDate ?? now),
-                  builder: (ctx, child) {
-                    return Theme(
-                      data: Theme.of(ctx).copyWith(
-                        colorScheme: const ColorScheme.light(
-                          primary: _accent,
-                          onPrimary: Colors.white,
-                          surface: Colors.white,
-                          onSurface: Color(0xFF1E293B),
-                        ),
-                      ),
-                      child: child!,
-                    );
-                  },
-                );
+                      if (datePicked != null) {
+                        final timePicked = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(
+                            currentDate ?? now,
+                          ),
+                          builder: (ctx, child) {
+                            return Theme(
+                              data: Theme.of(ctx).copyWith(
+                                colorScheme: const ColorScheme.light(
+                                  primary: _accent,
+                                  onPrimary: Colors.white,
+                                  surface: Colors.white,
+                                  onSurface: Color(0xFF1E293B),
+                                ),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
 
-                if (timePicked != null) {
-                  final finalDateTime = DateTime(
-                    datePicked.year,
-                    datePicked.month,
-                    datePicked.day,
-                    timePicked.hour,
-                    timePicked.minute,
-                  );
-                  controller.updateField(
-                    field.key,
-                    finalDateTime.toIso8601String(),
-                  );
-                }
-              }
-            },
+                        if (timePicked != null) {
+                          final finalDateTime = DateTime(
+                            datePicked.year,
+                            datePicked.month,
+                            datePicked.day,
+                            timePicked.hour,
+                            timePicked.minute,
+                          );
+                          controller.updateField(
+                            field.key,
+                            finalDateTime.toIso8601String(),
+                          );
+                        }
+                      }
+                    },
             child: InputDecorator(
               decoration: _styledDecoration(
                 label: field.label,
@@ -1131,11 +1159,18 @@ class _BoundDateTimeField extends StatelessWidget {
                           ? _filledGreen.withValues(alpha: 0.7)
                           : _accent.withValues(alpha: 0.6),
                 ),
-                suffixIcon: Icon(
-                  Icons.arrow_drop_down_circle_outlined,
-                  size: 20,
-                  color: Colors.grey.withValues(alpha: 0.5),
-                ),
+                suffixIcon:
+                    isLocked
+                        ? Icon(
+                          Icons.lock_outline,
+                          size: 18,
+                          color: Colors.grey.shade400,
+                        )
+                        : Icon(
+                          Icons.arrow_drop_down_circle_outlined,
+                          size: 20,
+                          color: Colors.grey.withValues(alpha: 0.5),
+                        ),
               ),
               child: Text(
                 isFilled ? displayText : 'Select Date & Time',
@@ -1193,11 +1228,16 @@ class _BoundNumberFieldState extends State<_BoundNumberField> {
 
       final isFilled = displayVal.isNotEmpty;
 
+      final isLocked =
+          widget.field.readonly ||
+          widget.controller.isFieldLockedByApi(widget.field.key);
+
       return _fieldWrapper(
         isFilled: isFilled,
         child: TextFormField(
           controller: _textController,
           keyboardType: TextInputType.number,
+          readOnly: isLocked,
           onChanged: (v) {
             final parsed = int.tryParse(v) ?? 0;
             widget.controller.updateField(widget.field.key, parsed);
@@ -1219,6 +1259,14 @@ class _BoundNumberFieldState extends State<_BoundNumberField> {
                       ? _filledGreen.withValues(alpha: 0.7)
                       : _accent.withValues(alpha: 0.6),
             ),
+            suffixIcon:
+                isLocked
+                    ? Icon(
+                      Icons.lock_outline,
+                      size: 18,
+                      color: Colors.grey.shade400,
+                    )
+                    : null,
           ),
         ),
       );
@@ -1255,6 +1303,10 @@ class _BoundDropdownState extends State<_BoundDropdown> {
 
       final isFilled = selectedValue != null && selectedValue.isNotEmpty;
 
+      final isLocked =
+          widget.field.readonly ||
+          widget.controller.isFieldLockedByApi(widget.field.key);
+
       return _fieldWrapper(
         isFilled: isFilled,
         child: DropdownButtonFormField<String>(
@@ -1272,6 +1324,14 @@ class _BoundDropdownState extends State<_BoundDropdown> {
                       ? _filledGreen.withValues(alpha: 0.7)
                       : _accent.withValues(alpha: 0.6),
             ),
+            suffixIcon:
+                isLocked
+                    ? Icon(
+                      Icons.lock_outline,
+                      size: 18,
+                      color: Colors.grey.shade400,
+                    )
+                    : null,
           ).copyWith(
             floatingLabelStyle: TextStyle(
               color: isFilled ? _filledGreen : const Color(0xFF0D6EFD),
@@ -1298,9 +1358,13 @@ class _BoundDropdownState extends State<_BoundDropdown> {
                   ),
                 );
               }).toList(),
-          onChanged: (v) {
-            if (v != null) widget.controller.updateField(widget.field.key, v);
-          },
+          onChanged:
+              isLocked
+                  ? null
+                  : (v) {
+                    if (v != null)
+                      widget.controller.updateField(widget.field.key, v);
+                  },
         ),
       );
     });
@@ -1330,6 +1394,9 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
 
       final isFilled = selectedItems.isNotEmpty;
 
+      final isLocked =
+          field.readonly || controller.isFieldLockedByApi(field.key);
+
       return _fieldWrapper(
         isFilled: isFilled,
         child: Material(
@@ -1337,7 +1404,10 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
             borderRadius: BorderRadius.circular(12),
-            onTap: () => _showMultiSelect(context, options, selectedItems),
+            onTap:
+                isLocked
+                    ? null
+                    : () => _showMultiSelect(context, options, selectedItems),
             child: InputDecorator(
               decoration: _styledDecoration(
                 label: field.label,
@@ -1351,11 +1421,18 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
                           ? _filledGreen.withValues(alpha: 0.7)
                           : _accent.withValues(alpha: 0.6),
                 ),
-                suffixIcon: const Icon(
-                  Icons.arrow_drop_down_circle_outlined,
-                  size: 20,
-                  color: Colors.grey,
-                ),
+                suffixIcon:
+                    isLocked
+                        ? Icon(
+                          Icons.lock_outline,
+                          size: 18,
+                          color: Colors.grey.shade400,
+                        )
+                        : const Icon(
+                          Icons.arrow_drop_down_circle_outlined,
+                          size: 20,
+                          color: Colors.grey,
+                        ),
               ),
               child:
                   isFilled

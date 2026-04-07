@@ -1516,28 +1516,10 @@ class InspectionFormController extends GetxController {
 
       // debugPrint('💾 Draft saved successfully to local storage');
 
-      // Always clear existing snackbars
-      try {
-        Get.closeAllSnackbars();
-      } catch (e) {
-        // Ignore errors from GetX snackbar system
-      }
-
-      // Simple delay to ensure GetX clears the overlay before showing new one
-      Future.delayed(const Duration(milliseconds: 100), () {
-        Get.snackbar(
-          'Data Saved',
-          'Your data has been saved as Draft',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.green.shade700,
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 12,
-          duration: const Duration(seconds: 2),
-          icon: const Icon(Icons.check_circle_outline, color: Colors.white),
-          shouldIconPulse: false,
-        );
-      });
+      TLoaders.successSnackBar(
+        title: 'Data Saved',
+        message: 'Your data has been saved as Draft',
+      );
     } catch (e) {
       // debugPrint('Save draft error: $e');
       Get.snackbar(
@@ -2043,7 +2025,7 @@ class InspectionFormController extends GetxController {
 
       // 7. Show stunning success dialog
       try {
-        Get.closeAllSnackbars();
+        TLoaders.hideSnackBar();
       } catch (_) {}
       _showSuccessDialog(
         response['message'] ??
@@ -2054,7 +2036,7 @@ class InspectionFormController extends GetxController {
     } catch (e) {
       // debugPrint('❌ Submit error: $e');
       try {
-        Get.closeAllSnackbars();
+        TLoaders.hideSnackBar();
       } catch (_) {}
       _showErrorDialog(e.toString());
     } finally {
@@ -2776,7 +2758,7 @@ class InspectionFormController extends GetxController {
       // 7. Show success dialog
       try {
         try {
-          Get.closeAllSnackbars();
+          TLoaders.hideSnackBar();
         } catch (e) {}
       } catch (_) {}
       _showSuccessDialog(
@@ -2786,7 +2768,7 @@ class InspectionFormController extends GetxController {
       // debugPrint('❌ Re-Inspection submit error: $e');
       try {
         try {
-          Get.closeAllSnackbars();
+          TLoaders.hideSnackBar();
         } catch (e) {}
       } catch (_) {}
       _showErrorDialog(e.toString());

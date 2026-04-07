@@ -6,11 +6,20 @@ import '../constants/colors.dart';
 import '../helpers/helper_functions.dart';
 
 class TLoaders {
-  static hideSnackBar() =>
-      ScaffoldMessenger.of(Get.context!).hideCurrentSnackBar();
+  static hideSnackBar() {
+    try {
+      final context = Get.context;
+      if (context != null) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      }
+    } catch (_) {}
+  }
 
   static customToast({required message}) {
-    ScaffoldMessenger.of(Get.context!).showSnackBar(
+    final context = Get.context;
+    if (context == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         elevation: 0,
         duration: const Duration(seconds: 3),
@@ -21,14 +30,14 @@ class TLoaders {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(30),
             color:
-                THelperFunctions.isDarkMode(Get.context!)
+                THelperFunctions.isDarkMode(context)
                     ? TColors.darkerGrey.withValues(alpha: 0.9)
                     : TColors.grey.withValues(alpha: 0.9),
           ),
           child: Center(
             child: Text(
               message,
-              style: Theme.of(Get.context!).textTheme.bodySmall,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
         ),
@@ -36,57 +45,105 @@ class TLoaders {
     );
   }
 
-  static successSnackBar({required title, message = '', duration = 3}) {
-    Get.closeAllSnackbars();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      Get.snackbar(
-        title,
-        message,
-        isDismissible: true,
-        shouldIconPulse: true,
-        colorText: Colors.white,
+  static successSnackBar({required String title, String message = '', int duration = 3}) {
+    final context = Get.context;
+    if (context == null) return;
+
+    hideSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Iconsax.check, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  if (message.isNotEmpty)
+                    Text(message, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
         backgroundColor: TColors.dashboardAppbarBackground,
-        snackPosition: SnackPosition.BOTTOM,
+        behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: duration),
         margin: const EdgeInsets.all(10),
-        icon: const Icon(Iconsax.check, color: TColors.white),
-      );
-    });
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
-  static warningSnackBar({required title, message = ''}) {
-    Get.closeAllSnackbars();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      Get.snackbar(
-        title,
-        message,
-        isDismissible: true,
-        shouldIconPulse: true,
-        colorText: TColors.white,
-        backgroundColor: Colors.black54,
-        snackPosition: SnackPosition.BOTTOM,
+  static warningSnackBar({required String title, String message = ''}) {
+    final context = Get.context;
+    if (context == null) return;
+
+    hideSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Iconsax.warning_2, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  if (message.isNotEmpty)
+                    Text(message, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.orange.shade800,
+        behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.all(20),
-        icon: const Icon(Iconsax.warning_2, color: TColors.white),
-      );
-    });
+        margin: const EdgeInsets.all(10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 
-  static errorSnackBar({required title, message = ''}) {
-    Get.closeAllSnackbars();
-    Future.delayed(const Duration(milliseconds: 100), () {
-      Get.snackbar(
-        title,
-        message,
-        isDismissible: true,
-        shouldIconPulse: true,
-        colorText: TColors.white,
-        backgroundColor: Colors.red.shade600,
-        snackPosition: SnackPosition.BOTTOM,
+  static errorSnackBar({required String title, String message = ''}) {
+    final context = Get.context;
+    if (context == null) return;
+
+    hideSnackBar();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            const Icon(Iconsax.warning_2, color: Colors.white),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                  if (message.isNotEmpty)
+                    Text(message, style: const TextStyle(color: Colors.white, fontSize: 12)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
-        margin: const EdgeInsets.all(20),
-        icon: const Icon(Iconsax.warning_2, color: TColors.white),
-      );
-    });
+        margin: const EdgeInsets.all(10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
   }
 }

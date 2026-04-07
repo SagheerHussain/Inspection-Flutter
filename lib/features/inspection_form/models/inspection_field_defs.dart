@@ -159,7 +159,7 @@ class InspectionFieldDefs {
           'Damaged',
         ]),
         F.img('rcTokenImages', 'RC Image', minImages: 2),
-        F.dateTime('inspectionDate', 'Inspection Date'),
+        F.dateTime('inspectionDate', 'Inspection Date', optional: true),
         F.multi('mismatchInRc', 'Mismatch in RC', ['No', 'Yes']),
         F.date('registrationDate', 'Registration Date'),
         F.date('fitnessValidity', 'Fitness Validity'),
