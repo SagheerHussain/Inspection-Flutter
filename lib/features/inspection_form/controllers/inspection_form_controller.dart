@@ -3202,11 +3202,21 @@ class InspectionFormController extends GetxController {
 
   // ─── CarModel Mapping Helpers ───
   CarModel _buildCarModelFromForm(InspectionFormModel data) {
+    // Retrieve logged-in user info from local storage
+    final storage = GetStorage();
+    final userEmail = storage.read('USER_EMAIL')?.toString() ?? '';
+    final userName = storage.read('USER_USERNAME')?.toString() ?? '';
+    // Use the lead's inspectionAddress as the latlong value
+    final address = schedule?.inspectionAddress ?? '';
+
     return buildCarModelFromForm(
       data,
       Map<String, List<String>>.from(imageFiles),
       Map<String, Map<String, String>>.from(mediaCloudinaryData),
       appointmentId,
+      userEmail: userEmail,
+      userName: userName,
+      inspectionAddress: address,
     );
   }
 

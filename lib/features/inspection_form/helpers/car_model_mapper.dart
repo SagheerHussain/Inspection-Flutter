@@ -100,8 +100,11 @@ CarModel buildCarModelFromForm(
   InspectionFormModel data,
   Map<String, List<String>> imageFiles,
   Map<String, Map<String, String>> cloudinaryData,
-  String appointmentId,
-) {
+  String appointmentId, {
+  String userEmail = '',
+  String userName = '',
+  String inspectionAddress = '',
+}) {
   // ── Helper shortcuts ──
   String s(String k) => _s(data, k);
   int i(String k) => _i(data, k);
@@ -170,8 +173,8 @@ CarModel buildCarModelFromForm(
   return CarModel(
     id: data.id,
     timestamp: DateTime.now(),
-    // renamed to ieName
-    emailAddress: s('emailAddress'),
+    // Use logged-in user's email; fall back to form data
+    emailAddress: userEmail.isNotEmpty ? userEmail : s('emailAddress'),
     appointmentId:
         s('appointmentId').isNotEmpty ? s('appointmentId') : appointmentId,
     // renamed to inspectionCity
@@ -182,7 +185,7 @@ CarModel buildCarModelFromForm(
     // changed to rcBookAvailabilityDropdownList
     rcBookAvailability: s('rcBookAvailability'),
     rcCondition: s('rcCondition'),
-    registrationNumber: s('registrationNumber'),
+    registrationNumber: s('registrationNumber').toUpperCase(),
     registrationDate: dt('registrationDate'),
     // renamed to fitnessValidity
     fitnessTill: dt('fitnessValidity'),
@@ -464,14 +467,14 @@ CarModel buildCarModelFromForm(
     status: s('status'),
     priceDiscovery: i('priceDiscovery'),
     priceDiscoveryBy: s('priceDiscoveryBy'),
-    latlong: s('latlong'),
+    latlong: inspectionAddress.isNotEmpty ? inspectionAddress : s('latlong'),
     retailAssociate: s('retailAssociate'),
     kmRangeLevel: i('kmRangeLevel'),
     highestBidder: s('highestBidder'),
     v: i('__v'),
 
     // ✅ New fields (all nullable) — below the comment line
-    ieName: s('emailAddress'), // renamed from emailAddress
+    ieName: userName.isNotEmpty ? userName : s('emailAddress'), // logged-in user's username
     inspectionCity: s('city'), // renamed from city
     rcBookAvailabilityDropdownList: asList('rcBookAvailability'),
     fitnessValidity: dt('fitnessValidity'),

@@ -1457,13 +1457,37 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  child: Text(
-                                    item,
-                                    style: const TextStyle(
-                                      color: Color(0xFF047857),
-                                      fontSize: 10,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        item,
+                                        style: const TextStyle(
+                                          color: Color(0xFF047857),
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                      if (!isLocked) ...[
+                                        const SizedBox(width: 4),
+                                        GestureDetector(
+                                          onTap: () {
+                                            final updated = List<String>.from(
+                                              selectedItems,
+                                            )..remove(item);
+                                            controller.updateField(
+                                              field.key,
+                                              updated,
+                                            );
+                                          },
+                                          child: const Icon(
+                                            Icons.close_rounded,
+                                            size: 14,
+                                            color: Color(0xFF047857),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 );
                               }).toList(),
