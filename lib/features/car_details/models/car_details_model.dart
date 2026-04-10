@@ -179,6 +179,9 @@ class CarDetailsModel {
   final String ieName;
   final String inspectionCity;
   final String budgetCar;
+  final int odometerReadingAfterTestDriveInKms;
+  final List<String> odometerReadingAfterTestDriveImages;
+  final Map<String, dynamic> rawData; // Added for dynamic access
 
   // ─── Images ───
   final List<String> rcTaxToken;
@@ -469,9 +472,12 @@ class CarDetailsModel {
     required this.chassisEmbossmentImages,
     required this.vinPlateImages,
     required this.roadTaxImages,
+    required this.odometerReadingAfterTestDriveInKms,
+    required this.odometerReadingAfterTestDriveImages,
     required this.createdAt,
     required this.updatedAt,
     required this.timestamp,
+    required this.rawData,
   });
 
   factory CarDetailsModel.fromJson(Map<String, dynamic> json) {
@@ -709,10 +715,126 @@ class CarDetailsModel {
       chassisEmbossmentImages: _safeStringList(json['chassisEmbossmentImages']),
       vinPlateImages: _safeStringList(json['vinPlateImages']),
       roadTaxImages: _safeStringList(json['roadTaxImages']),
+      odometerReadingAfterTestDriveInKms: json['odometerReadingAfterTestDriveInKms'] ?? 
+                                         json['odometerAfterTestDriveInKms'] ?? 0,
+      odometerReadingAfterTestDriveImages: _safeStringList(
+        json['odometerReadingAfterTestDriveImages'] ?? json['odometerAfterTestDriveImages']
+      ),
       createdAt: _safeString(json['createdAt']),
       updatedAt: _safeString(json['updatedAt']),
       timestamp: _safeString(json['timestamp']),
+      rawData: json,
     );
+  }
+
+  /// Dynamic helper to get a field's value (String, List<String>, etc)
+  dynamic getFieldValue(String key) {
+    // 1. Direct match (Highest Priority)
+    if (rawData.containsKey(key)) return rawData[key];
+
+    // 2. Try common suffixes used in different API versions
+    final List<String> variations = [
+      '${key}DropdownList',
+      '${key}Dropdown',
+      '${key}List',
+      '${key}Value',
+      '${key}Text',
+      '${key}InKms',
+      key.replaceAll('InKms', ''),
+    ];
+    
+    for (var v in variations) {
+      if (rawData.containsKey(v)) {
+        final val = rawData[v];
+        if (val is List && val.isNotEmpty) return val.join(', ');
+        return val;
+      }
+    }
+
+    // 3. Case-insensitive / alternate mapping scan
+    final lowerKey = key.toLowerCase();
+    for (var entry in rawData.entries) {
+      final entryKey = entry.key.toLowerCase();
+      if (entryKey == lowerKey) return entry.value;
+      
+      // Handle mapping like "engineVideo" -> "engineSound" if value matches
+      if (lowerKey.contains('video') && entryKey.contains('sound')) return entry.value;
+      if (lowerKey.contains('sound') && entryKey.contains('video')) return entry.value;
+    }
+
+    // 4. Known hard mappings (as fallbacks only)
+    switch (key) {
+      case 'transmissionType': return rawData['transmission'] ?? rawData['transmissionType'];
+      case 'driveTrain': return rawData['drivetrain'] ?? rawData['driveTrain'];
+      case 'acType': 
+        final val = rawData['acType'] ?? rawData['acTypeDropdownList'];
+        if (val != null && val.toString().isNotEmpty) return val;
+        return airConditioningClimateControl.isNotEmpty ? 'Climate Control' : airConditioningManual;
+      case 'acCooling': return rawData['acCooling'] ?? rawData['acCoolingDropdownList'];
+    }
+
+    return null;
+  }
+
+  /// Helper to get images/videos for a specific field key
+  List<String> getFieldImages(String key) {
+    // Priority 1: Direct key if it's already a list/string in rawData
+    final directValue = rawData[key];
+    if (directValue is List && directValue.isNotEmpty) return _safeStringList(directValue);
+    if (directValue is String && directValue.startsWith('http')) return [directValue];
+
+    // Priority 2: Try stripping/adding suffixes
+    final String baseKey = key.replaceAll('Images', '').replaceAll('Video', '').replaceAll('VideoImages', '');
+    final List<String> patterns = [
+      '${baseKey}Images', 
+      '${baseKey}Video', 
+      '${baseKey}VideoImages',
+      '${baseKey}Sound', // Handle engineVideo -> engineSound
+      baseKey,
+      key.replaceAll('Video', 'Sound'),
+      key.replaceAll('Sound', 'Video'),
+    ];
+
+    for (var pattern in patterns) {
+      if (pattern == key) continue; // Already checked direct match
+      final val = rawData[pattern];
+      if (val is List && val.isNotEmpty) return _safeStringList(val);
+      if (val is String && val.startsWith('http')) return [val];
+    }
+
+    // Priority 3: Special case mappings
+    if (key == 'bootDoorImages' || key == 'bootDoor') {
+      final val = rawData['bootDoorImages'] ?? rawData['bootImages'] ?? rawData['rearWithBootDoorOpen'];
+      if (val is List && val.isNotEmpty) return _safeStringList(val);
+      if (val is String && val.isNotEmpty) return [val];
+    }
+    if (key == 'rcTokenImages' || key == 'rcBookAvailability') return rcTaxToken;
+    if (key == 'chassisDetails') return chassisEmbossmentImages;
+    if (key == 'vinPlateDetails') return vinPlateImages;
+    if (key == 'insurance' || key == 'insuranceImages') return insuranceCopy;
+    if (key == 'duplicateKey' || key == 'duplicateKeyImages') return bothKeys;
+    if (key == 'engine' || key == 'engineBayImages') return engineBay;
+
+    // Priority 4: Airbag mapping
+    final airbagMapping = {
+      'airbagImages': 0, 'airbagImages0': 0,
+      'coDriverAirbagImages': 1, 'airbagImages1': 1,
+      'driverSeatAirbagImages': 2, 'airbagImages2': 2,
+      'coDriverSeatAirbagImages': 3, 'airbagImages3': 3,
+      'rhsCurtainAirbagImages': 4, 'airbagImages4': 4,
+      'lhsCurtainAirbagImages': 5, 'airbagImages5': 5,
+      'driverKneeAirbagImages': 6, 'airbagImages6': 6,
+      'coDriverKneeAirbagImages': 7, 'airbagImages7': 7,
+      'rhsRearSideAirbagImages': 8, 'airbagImages8': 8,
+      'lhsRearSideAirbagImages': 9, 'airbagImages9': 9,
+    };
+
+    if (airbagMapping.containsKey(key)) {
+      final index = airbagMapping[key]!;
+      if (index < airbags.length) return [airbags[index]];
+    }
+
+    return [];
   }
 
   /// Safe conversion of any value to string, handling nulls
@@ -789,6 +911,7 @@ class CarDetailsModel {
     ...rearSeatsFromRightSideDoorOpen,
     ...dashboardFromRearSeat,
     ...additionalImages2,
+    ...odometerReadingAfterTestDriveImages,
   ];
 
   /// All document images

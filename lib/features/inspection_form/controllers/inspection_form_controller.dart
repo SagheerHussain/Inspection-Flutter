@@ -36,16 +36,20 @@ class InspectionFormController extends GetxController {
   final RxSet<String> apiFetchedLockedFields = <String>{}.obs;
 
   // ── Re-Inspection state ──
-  /// Tracks whether this lead originated from a Re-Inspection
-  /// (set during data fetch — covers both direct Re-Inspection and Running leads that were Re-Inspected)
-  bool _isReInspectionOrigin = false;
 
-  /// True when the inspection should use the Re-Inspection update flow
+  /// True specifically when the lead is a Re-Inspection report (not just a draft).
+  /// This controls the "Re-Inspection Preview" dialog on submission.
   bool get isReInspection {
-    if (_isReInspectionOrigin) return true;
     final s =
         schedule?.inspectionStatus.toLowerCase().replaceAll('-', '') ?? '';
-    return s == 'reinspected' || s == 'reinspection';
+    final isReStatus = (s == 'reinspected' || s == 'reinspection');
+
+    // Check source field for re-inspection keywords
+    final source = schedule?.appointmentSource.toLowerCase() ?? '';
+    final isReSource =
+        source.contains('re-inspected') || source.contains('re-inspection');
+
+    return isReStatus || isReSource;
   }
 
   /// Stores the original data snapshot fetched from the API for Re-Inspection
@@ -83,6 +87,8 @@ class InspectionFormController extends GetxController {
   String get _snapshotKey => 'snapshot_$appointmentId';
   String get _snapshotImagesKey => 'snapshot_images_$appointmentId';
   String get _snapshotLockedFieldsKey => 'snapshot_locked_$appointmentId';
+  String get _snapshotOriginalDataKey => 'snapshot_original_$appointmentId';
+  String get _snapshotCarIdKey => 'snapshot_carid_$appointmentId';
 
   // Image storage: key → list of local file paths
   final RxMap<String, List<String>> imageFiles = <String, List<String>>{}.obs;
@@ -138,12 +144,45 @@ class InspectionFormController extends GetxController {
     isLoading.value = true;
     try {
       // ── RE-INSPECTION FLOW ──
+      // API data ALWAYS takes priority for Re-Inspection leads.
+      // Draft/cached data is only used as a fallback if the API call fails.
       if (isReInspection) {
-        // Check snapshot first — API called only once
+        // ── STEP 1: Always call the API first ──
+        try {
+          final response = await ApiService.get(
+            ApiConstants.carDetailsUrl(appointmentId),
+          );
+
+          final carData = response['carDetails'];
+          if (carData != null && carData is Map<String, dynamic>) {
+            _reInspectionCarId = carData['_id']?.toString();
+            _originalData = Map<String, dynamic>.from(carData);
+            _normalizeCarDataToFormKeys(carData);
+            inspectionData.value = InspectionFormModel.fromJson(carData);
+            _preFillMedia(carData);
+            await _saveSnapshot(); // cache for fallback on future failures
+
+            TLoaders.successSnackBar(
+              title: 'Re-Inspection Data Loaded',
+              message:
+                  'Previous inspection data pre-filled. Update fields as needed.',
+            );
+            _syncScheduleWithChanges();
+            isLoading.value = false;
+            return;
+          }
+        } catch (e) {
+          debugPrint('⚠️ Re-Inspection API fetch failed: $e — checking for cached data');
+        }
+
+        // ── STEP 2: API failed or returned null — fall back to cached snapshot ──
         final snapshot = _storage.read(_snapshotKey);
         if (snapshot != null && snapshot is Map) {
-          _isReInspectionOrigin = true;
-          _reInspectionCarId = snapshot['_id']?.toString();
+          _reInspectionCarId =
+              snapshot['_id']?.toString() ?? _storage.read(_snapshotCarIdKey);
+          _originalData = Map<String, dynamic>.from(
+            _storage.read(_snapshotOriginalDataKey) ?? {},
+          );
           inspectionData.value = InspectionFormModel.fromJson(
             Map<String, dynamic>.from(snapshot),
           );
@@ -157,15 +196,9 @@ class InspectionFormController extends GetxController {
               }
             }
           }
-          Get.snackbar(
-            'Draft Loaded',
-            'Continuing from your saved progress.',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.blue.shade700,
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 12,
-            duration: const Duration(seconds: 2),
+          TLoaders.warningSnackBar(
+            title: 'Using Cached Data',
+            message: 'Could not reach server. Loaded from last saved state.',
           );
           final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
           if (savedLockedFields != null && savedLockedFields is List) {
@@ -176,35 +209,8 @@ class InspectionFormController extends GetxController {
           return;
         }
 
-        // First open — hit the API and cache
-        final response = await ApiService.get(
-          ApiConstants.carDetailsUrl(appointmentId),
-        );
-
-        final carData = response['carDetails'];
-        if (carData != null) {
-          _isReInspectionOrigin = true;
-          _reInspectionCarId = carData['_id']?.toString();
-          _originalData = Map<String, dynamic>.from(carData);
-          _normalizeCarDataToFormKeys(carData);
-          inspectionData.value = InspectionFormModel.fromJson(carData);
-          _preFillMedia(carData);
-          await _saveSnapshot(); // cache so next open skips API
-
-          Get.snackbar(
-            'Re-Inspection Data Loaded',
-            'Previous inspection data pre-filled. Update fields as needed.',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.blue.shade700,
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 12,
-            duration: const Duration(seconds: 3),
-          );
-        } else {
-          _initializeNewInspection();
-        }
-
+        // ── STEP 3: No API data and no cache — start fresh ──
+        _initializeNewInspection();
         isLoading.value = false;
         return;
       }
@@ -220,8 +226,10 @@ class InspectionFormController extends GetxController {
         if (snapshot != null && snapshot is Map) {
           final cachedId = snapshot['_id']?.toString();
           if (cachedId != null && cachedId.isNotEmpty) {
-            _isReInspectionOrigin = true;
             _reInspectionCarId = cachedId;
+            _originalData = Map<String, dynamic>.from(
+              _storage.read(_snapshotOriginalDataKey) ?? {},
+            );
             inspectionData.value = InspectionFormModel.fromJson(
               Map<String, dynamic>.from(snapshot),
             );
@@ -235,15 +243,9 @@ class InspectionFormController extends GetxController {
                 }
               }
             }
-            Get.snackbar(
-              'Draft Loaded',
-              'Continuing from your saved progress.',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: Colors.blue.shade700,
-              colorText: Colors.white,
-              margin: const EdgeInsets.all(12),
-              borderRadius: 12,
-              duration: const Duration(seconds: 2),
+            TLoaders.successSnackBar(
+              title: 'Draft Loaded',
+              message: 'Continuing from your saved progress.',
             );
             final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
             if (savedLockedFields != null && savedLockedFields is List) {
@@ -257,14 +259,15 @@ class InspectionFormController extends GetxController {
           }
         }
 
-        // First open — call API to detect Re-Inspection origin
+        /*
+        // ── API FETCH DISABLED AS PER USER REQUEST ──
+        // First open — call API to detect existing car record (Draft or Re-Inspection)
         try {
           final response = await ApiService.get(
             ApiConstants.carDetailsUrl(appointmentId),
           );
           final carData = response['carDetails'];
           if (carData != null && carData['_id'] != null) {
-            _isReInspectionOrigin = true;
             _reInspectionCarId = carData['_id']?.toString();
             _originalData = Map<String, dynamic>.from(carData);
             _normalizeCarDataToFormKeys(carData);
@@ -272,15 +275,13 @@ class InspectionFormController extends GetxController {
             _preFillMedia(carData);
             await _saveSnapshot(); // cache for all future opens
 
-            Get.snackbar(
-              'Re-Inspection Data Loaded',
-              'Previous inspection data pre-filled. Update fields as needed.',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: Colors.blue.shade700,
-              colorText: Colors.white,
-              margin: const EdgeInsets.all(12),
-              borderRadius: 12,
-              duration: const Duration(seconds: 2),
+            TLoaders.successSnackBar(
+              title:
+                  isReInspection ? 'Re-Inspection Data Loaded' : 'Data Loaded',
+              message:
+                  isReInspection
+                      ? 'Previous inspection data pre-filled. Update fields as needed.'
+                      : 'Existing inspection data loaded from server.',
             );
 
             _syncScheduleWithChanges();
@@ -290,6 +291,7 @@ class InspectionFormController extends GetxController {
         } catch (e) {
           // Fall through to standard flow
         }
+        */
       }
 
       // ── STANDARD FLOW (Scheduled / Running without Re-Inspection) ──
@@ -319,15 +321,9 @@ class InspectionFormController extends GetxController {
           }
         }
 
-        Get.snackbar(
-          'Draft Loaded',
-          'Continuing from your saved progress.',
-          snackPosition: SnackPosition.BOTTOM,
-          backgroundColor: Colors.blue.shade700,
-          colorText: Colors.white,
-          margin: const EdgeInsets.all(12),
-          borderRadius: 12,
-          duration: const Duration(seconds: 2),
+        TLoaders.successSnackBar(
+          title: 'Draft Loaded',
+          message: 'Continuing from your saved progress.',
         );
         final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
         if (savedLockedFields != null && savedLockedFields is List) {
@@ -338,6 +334,8 @@ class InspectionFormController extends GetxController {
         return;
       }
 
+      /*
+      // ── API FETCH DISABLED AS PER USER REQUEST ──
       // ── FIRST OPEN: call the API, then cache the result ──
       try {
         final response = await ApiService.get(
@@ -357,15 +355,9 @@ class InspectionFormController extends GetxController {
           // ── Cache the normalised data so subsequent opens skip the API ──
           await _saveSnapshot();
 
-          Get.snackbar(
-            'Data Loaded',
-            'Inspection data loaded from server.',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.blue.shade700,
-            colorText: Colors.white,
-            margin: const EdgeInsets.all(12),
-            borderRadius: 12,
-            duration: const Duration(seconds: 2),
+          TLoaders.successSnackBar(
+            title: 'Data Loaded',
+            message: 'Existing inspection data loaded from server.',
           );
           _syncScheduleWithChanges();
           isLoading.value = false;
@@ -374,8 +366,9 @@ class InspectionFormController extends GetxController {
       } catch (e) {
         // debugPrint('⚠️ Car details fetch failed: $e — falling back to new form');
       }
+      */
 
-      // No car record found — initialize empty form
+      // No car record found or API skipped — initialize empty form
       _initializeNewInspection();
     } catch (e) {
       // debugPrint('Fetch failed, initializing new: $e');
@@ -386,328 +379,372 @@ class InspectionFormController extends GetxController {
   }
 
   /// Reverse-maps API/CarModel JSON keys → Form field keys.
-  /// The CarModel.toJson() outputs keys that differ from the form field keys.
-  /// This method copies values from API keys to the form keys so
-  /// InspectionFormModel.fromJson() + getFieldValue() can find them.
+  /// The API response uses legacy keys (e.g. 'rcTaxToken', 'lhsFront45Degree')
+  /// while the form uses renamed keys (e.g. 'rcTokenImages', 'lhsFullViewImages').
+  /// This method copies values so InspectionFormModel.fromJson() can find them.
   void _normalizeCarDataToFormKeys(Map<String, dynamic> carData) {
-    int mapped = 0;
-
-    // Helper: parse a date value from various formats (ISO string, MongoDB $date, etc.)
-    // and return a human-readable string
-    String? _formatDate(dynamic val, {bool monthYearOnly = false}) {
-      if (val == null) return null;
-      DateTime? dt;
-
-      if (val is String && val.isNotEmpty && val != 'N/A') {
-        dt = DateTime.tryParse(val);
-      } else if (val is Map) {
-        // MongoDB $date format: {"$date": "2024-03-15T00:00:00.000Z"} or {"$date": {"$numberLong": "..."}}
-        final dateVal = val['\$date'];
-        if (dateVal is String) {
-          dt = DateTime.tryParse(dateVal);
-        } else if (dateVal is Map && dateVal['\$numberLong'] != null) {
-          final ms = int.tryParse(dateVal['\$numberLong'].toString());
-          if (ms != null) dt = DateTime.fromMillisecondsSinceEpoch(ms);
-        }
-      }
-
-      if (dt == null) return null;
-
-      if (monthYearOnly) {
-        return '${dt.month.toString().padLeft(2, '0')}-${dt.year}';
-      }
-      return '${dt.day.toString().padLeft(2, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.year}';
-    }
-
-    // Helper: normalize a date field in carData to DD-MM-YYYY format
-    void normDate(String key, {bool monthYearOnly = false}) {
-      final val = carData[key];
-      if (val == null || val.toString().isEmpty || val.toString() == 'N/A')
-        return;
-
-      // Skip if already in DD-MM-YYYY format
-      final str = val.toString();
-      if (RegExp(r'^\d{2}-\d{2}-\d{4}$').hasMatch(str)) return;
-      if (monthYearOnly && RegExp(r'^\d{2}-\d{4}$').hasMatch(str)) return;
-
-      final formatted = _formatDate(val, monthYearOnly: monthYearOnly);
-      if (formatted != null) {
-        carData[key] = formatted;
-        mapped++;
-        // debugPrint('📅 Formatted date [$key]: $str → $formatted');
-      }
-    }
-
-    // Helper: copy value from apiKey to formKey if formKey doesn't already have a value
-    void map(String apiKey, String formKey, {bool isList = false}) {
-      final apiVal = carData[apiKey];
-      final formVal = carData[formKey];
-
-      // Skip if form key already has a value
-      if (formVal != null &&
-          formVal.toString().isNotEmpty &&
-          formVal.toString() != '0' &&
-          formVal.toString() != 'N/A') {
-        return;
-      }
-
-      if (apiVal == null ||
-          apiVal.toString().isEmpty ||
-          apiVal.toString() == 'N/A')
-        return;
-
-      if (isList && apiVal is List && apiVal.isNotEmpty) {
-        // If the field is a multi-select field, keep it as a list.
-        // Otherwise, take the first element for single-value dropdowns.
-        final field = _findFieldByKey(formKey);
-        if (field?.type == FType.multiSelect) {
-          carData[formKey] = apiVal.map((e) => e.toString()).toList();
-        } else {
-          carData[formKey] = apiVal.first.toString();
-        }
-        mapped++;
-      } else if (!isList) {
-        carData[formKey] = apiVal;
-        mapped++;
-      }
-    }
-
-    // ═════════════════════════════════════════════
-    // DATE FIELD RENAMES (API key → Form key)
-    // ═════════════════════════════════════════════
-    map('fitnessTill', 'fitnessValidity');
-    map('yearAndMonthOfManufacture', 'yearMonthOfManufacture');
-    map('yearMonthOfManufacture', 'yearMonthOfManufacture');
-
-    // Date fields are now FType.date with a date picker.
-    // The _BoundDateField widget handles ISO → DD-MM-YYYY display.
-    // No need to pre-format date strings.
-
-    // ═════════════════════════════════════════════
-    // STRING FIELD RENAMES
-    // ═════════════════════════════════════════════
-    map('ieName', 'emailAddress');
-    map('inspectionCity', 'city');
-    map('policyNumber', 'insurancePolicyNumber');
-    map('airConditioningManual', 'acType');
-    map('airConditioningClimateControl', 'acCooling');
-    map('commentsOnAC', 'commentsOnAC');
-    map('odometerReadingBeforeTestDrive', 'odometerReadingInKms');
-    map('driverAirbag', 'airbagFeaturesDriverSide');
-    map('coDriverAirbag', 'airbagFeaturesCoDriverSide');
-
-    // ═════════════════════════════════════════════
-    // DROPDOWN LIST → SINGLE VALUE CONVERSIONS
-    // The API stores these as arrays (XDropdownList),
-    // but the form expects a single string value.
-    // ═════════════════════════════════════════════
-    map('rcBookAvailabilityDropdownList', 'rcBookAvailability', isList: true);
-    map('mismatchInRcDropdownList', 'mismatchInRc', isList: true);
-    map('insuranceDropdownList', 'insurance', isList: true);
-    map('mismatchInInsuranceDropdownList', 'mismatchInInsurance', isList: true);
-    map('additionalDetailsDropdownList', 'additionalDetails', isList: true);
-    map('bonnetDropdownList', 'bonnet', isList: true);
-    map('frontWindshieldDropdownList', 'frontWindshield', isList: true);
-    map('roofDropdownList', 'roof', isList: true);
-    map('frontBumperDropdownList', 'frontBumper', isList: true);
-    map('lhsHeadlampDropdownList', 'lhsHeadlamp', isList: true);
-    map('lhsFoglampDropdownList', 'lhsFoglamp', isList: true);
-    map('rhsHeadlampDropdownList', 'rhsHeadlamp', isList: true);
-    map('rhsFoglampDropdownList', 'rhsFoglamp', isList: true);
-    map('lhsFenderDropdownList', 'lhsFender', isList: true);
-    map('lhsOrvmDropdownList', 'lhsOrvm', isList: true);
-    map('lhsAPillarDropdownList', 'lhsAPillar', isList: true);
-    map('lhsBPillarDropdownList', 'lhsBPillar', isList: true);
-    map('lhsCPillarDropdownList', 'lhsCPillar', isList: true);
-    map('lhsFrontWheelDropdownList', 'lhsFrontAlloy', isList: true);
-    map('lhsFrontTyreDropdownList', 'lhsFrontTyre', isList: true);
-    map('lhsRearWheelDropdownList', 'lhsRearAlloy', isList: true);
-    map('lhsRearTyreDropdownList', 'lhsRearTyre', isList: true);
-    map('lhsFrontDoorDropdownList', 'lhsFrontDoor', isList: true);
-    map('lhsRearDoorDropdownList', 'lhsRearDoor', isList: true);
-    map('lhsRunningBorderDropdownList', 'lhsRunningBorder', isList: true);
-    map('lhsQuarterPanelDropdownList', 'lhsQuarterPanel', isList: true);
-    map('rearBumperDropdownList', 'rearBumper', isList: true);
-    map('lhsTailLampDropdownList', 'lhsTailLamp', isList: true);
-    map('rhsTailLampDropdownList', 'rhsTailLamp', isList: true);
-    map('rearWindshieldDropdownList', 'rearWindshield', isList: true);
-    map('bootDoorDropdownList', 'bootDoor', isList: true);
-    map('spareTyreDropdownList', 'spareTyre', isList: true);
-    map('bootFloorDropdownList', 'bootFloor', isList: true);
-    map('rhsRearWheelDropdownList', 'rhsRearAlloy', isList: true);
-    map('rhsRearTyreDropdownList', 'rhsRearTyre', isList: true);
-    map('rhsFrontWheelDropdownList', 'rhsFrontAlloy', isList: true);
-    map('rhsFrontTyreDropdownList', 'rhsFrontTyre', isList: true);
-    map('rhsQuarterPanelDropdownList', 'rhsQuarterPanel', isList: true);
-    map('rhsAPillarDropdownList', 'rhsAPillar', isList: true);
-    map('rhsBPillarDropdownList', 'rhsBPillar', isList: true);
-    map('rhsCPillarDropdownList', 'rhsCPillar', isList: true);
-    map('rhsRunningBorderDropdownList', 'rhsRunningBorder', isList: true);
-    map('rhsRearDoorDropdownList', 'rhsRearDoor', isList: true);
-    map('rhsFrontDoorDropdownList', 'rhsFrontDoor', isList: true);
-    map('rhsOrvmDropdownList', 'rhsOrvm', isList: true);
-    map('rhsFenderDropdownList', 'rhsFender', isList: true);
-    map('commentsOnExteriorDropdownList', 'comments', isList: true);
-    map('upperCrossMemberDropdownList', 'upperCrossMember', isList: true);
-    map('radiatorSupportDropdownList', 'radiatorSupport', isList: true);
-    map('headlightSupportDropdownList', 'headlightSupport', isList: true);
-    map('lowerCrossMemberDropdownList', 'lowerCrossMember', isList: true);
-    map('lhsApronDropdownList', 'lhsApron', isList: true);
-    map('rhsApronDropdownList', 'rhsApron', isList: true);
-    map('firewallDropdownList', 'firewall', isList: true);
-    map('cowlTopDropdownList', 'cowlTop', isList: true);
-    map('engineDropdownList', 'engine', isList: true);
-    map('batteryDropdownList', 'battery', isList: true);
-    map('coolantDropdownList', 'coolant', isList: true);
-    map(
-      'engineOilLevelDipstickDropdownList',
-      'engineOilLevelDipstick',
-      isList: true,
-    );
-    map('engineOilDropdownList', 'engineOil', isList: true);
-    map('engineMountDropdownList', 'engineMount', isList: true);
-    map(
-      'enginePermisableBlowByDropdownList',
-      'enginePermisableBlowBy',
-      isList: true,
-    );
-    map('exhaustSmokeDropdownList', 'exhaustSmoke', isList: true);
-    map('clutchDropdownList', 'clutch', isList: true);
-    map('gearShiftDropdownList', 'gearShift', isList: true);
-    map('commentsOnEngineDropdownList', 'commentsOnEngine', isList: true);
-    map('commentsOnEngineOilDropdownList', 'commentsOnEngineOil', isList: true);
-    map('commentsOnTowingDropdownList', 'commentsOnTowing', isList: true);
-    map(
-      'commentsOnTransmissionDropdownList',
-      'commentsOnTransmission',
-      isList: true,
-    );
-    map('commentsOnRadiatorDropdownList', 'commentsOnRadiator', isList: true);
-    map('commentsOnOthersDropdownList', 'commentsOnOthers', isList: true);
-    map('steeringDropdownList', 'steering', isList: true);
-    map('brakesDropdownList', 'brakes', isList: true);
-    map('suspensionDropdownList', 'suspension', isList: true);
-    map('rearWiperWasherDropdownList', 'rearWiperWasher', isList: true);
-    map('rearDefoggerDropdownList', 'rearDefogger', isList: true);
-    map('infotainmentSystemDropdownList', 'infotainmentSystem', isList: true);
-    map(
-      'rhsFrontDoorFeaturesDropdownList',
-      'powerWindowConditionRhsFront',
-      isList: true,
-    );
-    map(
-      'lhsFrontDoorFeaturesDropdownList',
-      'powerWindowConditionLhsFront',
-      isList: true,
-    );
-    map(
-      'rhsRearDoorFeaturesDropdownList',
-      'powerWindowConditionRhsRear',
-      isList: true,
-    );
-    map(
-      'lhsRearDoorFeaturesDropdownList',
-      'powerWindowConditionLhsRear',
-      isList: true,
-    );
-    map('commentOnInteriorDropdownList', 'commentOnInterior', isList: true);
-    map('sunroofDropdownList', 'sunroof', isList: true);
-    map('reverseCameraDropdownList', 'reverseCamera', isList: true);
-    map('acTypeDropdownList', 'acType');
-    map('acCoolingDropdownList', 'acCooling');
-    map('frontWiperAndWasherDropdownList', 'frontWiperAndWasher', isList: true);
-    map('lhsRearFogLampDropdownList', 'lhsRearFogLamp', isList: true);
-    map('rhsRearFogLampDropdownList', 'rhsRearFogLamp', isList: true);
-    map('spareWheelDropdownList', 'spareWheel', isList: true);
-    map('lhsSideMemberDropdownList', 'lhsSideMember', isList: true);
-    map('rhsSideMemberDropdownList', 'rhsSideMember', isList: true);
-    map('transmissionTypeDropdownList', 'transmissionType', isList: true);
-    map('driveTrainDropdownList', 'driveTrain', isList: true);
-    map(
-      'commentsOnClusterMeterDropdownList',
-      'commentsOnClusterMeter',
-      isList: true,
-    );
-    map('dashboardDropdownList', 'dashboard', isList: true);
-    map('driverSeatDropdownList', 'driverSeat', isList: true);
-    map('coDriverSeatDropdownList', 'coDriverSeat', isList: true);
-    map('frontCentreArmRestDropdownList', 'frontCentreArmRest', isList: true);
-    map('rearSeatsDropdownList', 'rearSeats', isList: true);
-    map('thirdRowSeatsDropdownList', 'thirdRowSeats', isList: true);
-
-    // Seats Upholstery reverse logic (leatherSeats/fabricSeats → seatsUpholstery)
-    if ((carData['seatsUpholstery'] == null ||
-        carData['seatsUpholstery'].toString().isEmpty ||
-        carData['seatsUpholstery'] == 'N/A')) {
-      if (carData['leatherSeats'] == 'Yes') {
-        carData['seatsUpholstery'] = 'Leather';
-        mapped++;
-      } else if (carData['fabricSeats'] == 'Yes') {
-        carData['seatsUpholstery'] = 'Fabric';
-        mapped++;
-      }
-    }
-
-    // debugPrint('🔄 Reverse-mapping complete: $mapped fields normalized from API → form keys');
-  }
-
-  /// Extracts image/video URLs from API response and populates imageFiles
-  void _preFillMedia(Map<String, dynamic> carData) {
-    // 1. Explicit mappings where API keys and Form keys differ significantly
-    final mediaMap = {
-      'rcTaxToken': 'rcTokenImages',
-      'insuranceCopy': 'insuranceImages',
-      'bothKeys': 'duplicateKeyImages',
-      'frontMain': 'frontMainImages',
-      'lhsFront45Degree': 'lhsFullViewImages',
-      'lhsFrontAlloyImages': 'lhsFrontWheelImages',
-      'rhsRear45Degree': 'rhsFullViewImages',
-      'rhsRearWheelImages': 'rhsRearWheelImages',
-      'rhsFrontAlloyImages': 'rhsFrontWheelImages',
-      'engineBay': 'engineBayImages',
-      'engineSound': 'engineVideo',
-      'apronLhsRhs': 'lhsApronImages',
-      'meterConsoleWithEngineOn': 'meterConsoleWithEngineOnImages',
-      'frontSeatsFromDriverSideDoorOpen': 'interiorImage1',
-      'rearSeatsFromRightSideDoorOpen': 'interiorImage2',
-      'dashboardFromRearSeat': 'interiorImage3',
-      'additionalImages2': 'interiorImage4',
+    // ── Text/Dropdown field mappings: apiKey → formKey ──
+    final Map<String, String> textMappings = {
+      // Identity / RC
+      'inspectionCity': 'city',
+      'ieName': 'emailAddress',
+      'fitnessValidity': 'fitnessTill',
+      'yearAndMonthOfManufacture': 'yearMonthOfManufacture',
+      'policyNumber': 'insurancePolicyNumber',
+      // Exterior dropdowns
+      'bonnetDropdownList': 'bonnet',
+      'frontWindshieldDropdownList': 'frontWindshield',
+      'roofDropdownList': 'roof',
+      'frontBumperDropdownList': 'frontBumper',
+      'lhsHeadlampDropdownList': 'lhsHeadlamp',
+      'lhsFoglampDropdownList': 'lhsFoglamp',
+      'rhsHeadlampDropdownList': 'rhsHeadlamp',
+      'rhsFoglampDropdownList': 'rhsFoglamp',
+      'lhsFenderDropdownList': 'lhsFender',
+      'lhsOrvmDropdownList': 'lhsOrvm',
+      'lhsAPillarDropdownList': 'lhsAPillar',
+      'lhsBPillarDropdownList': 'lhsBPillar',
+      'lhsCPillarDropdownList': 'lhsCPillar',
+      'lhsFrontWheelDropdownList': 'lhsFrontAlloy',
+      'lhsFrontTyreDropdownList': 'lhsFrontTyre',
+      'lhsRearWheelDropdownList': 'lhsRearAlloy',
+      'lhsRearTyreDropdownList': 'lhsRearTyre',
+      'lhsFrontDoorDropdownList': 'lhsFrontDoor',
+      'lhsRearDoorDropdownList': 'lhsRearDoor',
+      'lhsRunningBorderDropdownList': 'lhsRunningBorder',
+      'lhsQuarterPanelDropdownList': 'lhsQuarterPanel',
+      'rearBumperDropdownList': 'rearBumper',
+      'lhsTailLampDropdownList': 'lhsTailLamp',
+      'rhsTailLampDropdownList': 'rhsTailLamp',
+      'rearWindshieldDropdownList': 'rearWindshield',
+      'bootDoorDropdownList': 'bootDoor',
+      'spareTyreDropdownList': 'spareTyre',
+      'bootFloorDropdownList': 'bootFloor',
+      'rhsRearWheelDropdownList': 'rhsRearAlloy',
+      'rhsRearTyreDropdownList': 'rhsRearTyre',
+      'rhsFrontWheelDropdownList': 'rhsFrontAlloy',
+      'rhsFrontTyreDropdownList': 'rhsFrontTyre',
+      'rhsQuarterPanelDropdownList': 'rhsQuarterPanel',
+      'rhsAPillarDropdownList': 'rhsAPillar',
+      'rhsBPillarDropdownList': 'rhsBPillar',
+      'rhsCPillarDropdownList': 'rhsCPillar',
+      'rhsRunningBorderDropdownList': 'rhsRunningBorder',
+      'rhsRearDoorDropdownList': 'rhsRearDoor',
+      'rhsFrontDoorDropdownList': 'rhsFrontDoor',
+      'rhsOrvmDropdownList': 'rhsOrvm',
+      'rhsFenderDropdownList': 'rhsFender',
+      'commentsOnExteriorDropdownList': 'comments',
+      // Engine / Mechanical
+      'upperCrossMemberDropdownList': 'upperCrossMember',
+      'radiatorSupportDropdownList': 'radiatorSupport',
+      'headlightSupportDropdownList': 'headlightSupport',
+      'lowerCrossMemberDropdownList': 'lowerCrossMember',
+      'lhsApronDropdownList': 'lhsApron',
+      'rhsApronDropdownList': 'rhsApron',
+      'firewallDropdownList': 'firewall',
+      'cowlTopDropdownList': 'cowlTop',
+      'engineDropdownList': 'engine',
+      'batteryDropdownList': 'battery',
+      'coolantDropdownList': 'coolant',
+      'engineOilLevelDipstickDropdownList': 'engineOilLevelDipstick',
+      'engineOilDropdownList': 'engineOil',
+      'engineMountDropdownList': 'engineMount',
+      'enginePermisableBlowByDropdownList': 'enginePermisableBlowBy',
+      'exhaustSmokeDropdownList': 'exhaustSmoke',
+      'clutchDropdownList': 'clutch',
+      'gearShiftDropdownList': 'gearShift',
+      'commentsOnEngineDropdownList': 'commentsOnEngine',
+      'commentsOnEngineOilDropdownList': 'commentsOnEngineOil',
+      'commentsOnTowingDropdownList': 'commentsOnTowing',
+      'commentsOnTransmissionDropdownList': 'commentsOnTransmission',
+      'commentsOnRadiatorDropdownList': 'commentsOnRadiator',
+      'commentsOnOthersDropdownList': 'commentsOnOthers',
+      // Interior / Electricals
+      'steeringDropdownList': 'steering',
+      'brakesDropdownList': 'brakes',
+      'suspensionDropdownList': 'suspension',
+      'odometerReadingBeforeTestDrive': 'odometerReadingInKms',
+      'rearWiperWasherDropdownList': 'rearWiperWasher',
+      'rearDefoggerDropdownList': 'rearDefogger',
+      'infotainmentSystemDropdownList': 'infotainmentSystem',
+      'rhsFrontDoorFeaturesDropdownList': 'powerWindowConditionRhsFront',
+      'lhsFrontDoorFeaturesDropdownList': 'powerWindowConditionLhsFront',
+      'rhsRearDoorFeaturesDropdownList': 'powerWindowConditionRhsRear',
+      'lhsRearDoorFeaturesDropdownList': 'powerWindowConditionLhsRear',
+      'commentOnInteriorDropdownList': 'commentOnInterior',
+      'sunroofDropdownList': 'sunroof',
+      'reverseCameraDropdownList': 'reverseCamera',
+      'acTypeDropdownList': 'acType',
+      'acCoolingDropdownList': 'acCooling',
+      // Airbag renamed fields
+      'driverAirbag': 'airbagFeaturesDriverSide',
+      'coDriverAirbag': 'airbagFeaturesCoDriverSide',
+      'coDriverSeatAirbag': 'airbagFeaturesLhsAPillarCurtain',
+      'lhsCurtainAirbag': 'airbagFeaturesLhsBPillarCurtain',
+      'lhsRearSideAirbag': 'airbagFeaturesLhsCPillarCurtain',
+      'driverSeatAirbag': 'airbagFeaturesRhsAPillarCurtain',
+      'rhsCurtainAirbag': 'airbagFeaturesRhsBPillarCurtain',
+      'rhsRearSideAirbag': 'airbagFeaturesRhsCPillarCurtain',
+      // Additional new fields
+      'rcBookAvailabilityDropdownList': 'rcBookAvailability',
+      'mismatchInRcDropdownList': 'mismatchInRc',
+      'insuranceDropdownList': 'insurance',
+      'mismatchInInsuranceDropdownList': 'mismatchInInsurance',
+      'additionalDetailsDropdownList': 'additionalDetails',
+      'frontWiperAndWasherDropdownList': 'frontWiperAndWasher',
+      'lhsRearFogLampDropdownList': 'lhsRearFogLamp',
+      'rhsRearFogLampDropdownList': 'rhsRearFogLamp',
+      'spareWheelDropdownList': 'spareWheel',
+      'lhsSideMemberDropdownList': 'lhsSideMember',
+      'rhsSideMemberDropdownList': 'rhsSideMember',
+      'transmissionTypeDropdownList': 'transmissionType',
+      'driveTrainDropdownList': 'driveTrain',
+      'commentsOnClusterMeterDropdownList': 'commentsOnClusterMeter',
+      'dashboardDropdownList': 'dashboard',
+      'driverSeatDropdownList': 'driverSeat',
+      'coDriverSeatDropdownList': 'coDriverSeat',
+      'frontCentreArmRestDropdownList': 'frontCentreArmRest',
+      'rearSeatsDropdownList': 'rearSeats',
+      'thirdRowSeatsDropdownList': 'thirdRowSeats',
     };
 
-    // 2. Iterate through all API data and try to find matching form fields
-    carData.forEach((apiKey, val) {
-      if (val == null) return;
-
-      String? targetFormKey;
-
-      if (mediaMap.containsKey(apiKey)) {
-        targetFormKey = mediaMap[apiKey];
-      } else {
-        // Try exact match or appending 'Images'
-        if (_findFieldByKey(apiKey) != null) {
-          targetFormKey = apiKey;
-        } else if (_findFieldByKey('${apiKey}Images') != null) {
-          targetFormKey = '${apiKey}Images';
-        }
+    // For each mapping: if the API key exists in carData but the form key
+    // does NOT, copy the value over. If both exist, prefer what's already there
+    // (the API key) but also set the form key so getFieldValue finds it.
+    void copyIfPresent(String apiKey, String formKey) {
+      final apiVal = carData[apiKey];
+      if (apiVal == null) return;
+      // For List values from DropdownList fields, join into comma-separated string
+      if (apiVal is List && apiVal.isNotEmpty) {
+        carData[formKey] = apiVal.join(', ');
+      } else if (carData[formKey] == null || carData[formKey].toString().isEmpty) {
+        carData[formKey] = apiVal;
       }
+    }
 
-      if (targetFormKey != null) {
-        final field = _findFieldByKey(targetFormKey);
-        if (field != null &&
-            (field.type == FType.image || field.type == FType.video)) {
-          if (val is List) {
-            imageFiles[targetFormKey] = val.map((e) => e.toString()).toList();
-          } else if (val is String && val.isNotEmpty) {
-            imageFiles[targetFormKey] = [val];
-          }
-        }
+    // Apply all text/dropdown mappings (both directions)
+    textMappings.forEach((apiKey, formKey) {
+      copyIfPresent(apiKey, formKey);
+      // Also reverse: if API response has the formKey value, ensure the
+      // form can also find it under the apiKey (for DropdownList storage)
+      if (carData[formKey] != null && carData[apiKey] == null) {
+        carData[apiKey] = carData[formKey];
       }
     });
 
+    // ── Merged/Split field handling ──
+    // seatsUpholstery ← leatherSeats/fabricSeats
+    if (carData['seatsUpholstery'] == null || carData['seatsUpholstery'].toString().isEmpty) {
+      if (carData['leatherSeats']?.toString().toLowerCase() == 'yes') {
+        carData['seatsUpholstery'] = 'Leather';
+      } else if (carData['fabricSeats']?.toString().toLowerCase() == 'yes') {
+        carData['seatsUpholstery'] = 'Fabric';
+      }
+    }
+
+    // steeringMountedMediaControls / steeringMountedSystemControls ← steeringMountedAudioControl
+    if (carData['steeringMountedMediaControls'] == null || 
+        carData['steeringMountedMediaControls'].toString().isEmpty) {
+      carData['steeringMountedMediaControls'] = carData['steeringMountedAudioControl'] ?? '';
+    }
+    if (carData['steeringMountedSystemControls'] == null || 
+        carData['steeringMountedSystemControls'].toString().isEmpty) {
+      carData['steeringMountedSystemControls'] = carData['steeringMountedAudioControl'] ?? '';
+    }
+
+    // musicSystem → infotainmentSystem
+    if (carData['infotainmentSystem'] == null || carData['infotainmentSystem'].toString().isEmpty) {
+      carData['infotainmentSystem'] = carData['musicSystem'] ?? '';
+    }
+
+    debugPrint('✅ _normalizeCarDataToFormKeys completed for Re-Inspection');
+  }
+
+  /// Pre-fills the imageFiles reactive map with remote URLs from the API response.
+  /// This allows the form to display previously uploaded images for Re-Inspection.
+  void _preFillMedia(Map<String, dynamic> carData) {
+    // ── Image field mappings: API key → form key ──
+    // The API stores images under legacy keys; the form expects new keys.
+    final Map<String, String> imageMappings = {
+      'rcTaxToken': 'rcTokenImages',
+      'insuranceCopy': 'insuranceImages',
+      'bothKeys': 'duplicateKeyImages',
+      'form26GdCopyIfRcIsLost': 'form26AndGdCopyIfRcIsLostImages',
+      'frontMain': 'frontMainImages',
+      'lhsFront45Degree': 'lhsFullViewImages',
+      'lhsFrontAlloyImages': 'lhsFrontWheelImages',
+      'lhsRearAlloyImages': 'lhsRearWheelImages',
+      'rearMain': 'rearMainImages',
+      'rhsRear45Degree': 'rhsFullViewImages',
+      'rhsRearAlloyImages': 'rhsRearWheelImages',
+      'rhsFrontAlloyImages': 'rhsFrontWheelImages',
+      'engineBay': 'engineBayImages',
+      'additionalImages': 'additionalImages', // same key
+      'engineSound': 'engineVideo',
+      'exhaustSmokeImages': 'exhaustSmokeVideo',
+      'meterConsoleWithEngineOn': 'meterConsoleWithEngineOnImages',
+      'frontSeatsFromDriverSideDoorOpen': 'frontSeatsFromDriverSideImages',
+      'rearSeatsFromRightSideDoorOpen': 'rearSeatsFromRightSideImages',
+      'dashboardFromRearSeat': 'dashboardImages',
+      'additionalImages2': 'additionalInteriorImages',
+      'bootdoorimages': 'bootDoorImages',
+    };
+
+    // ── Direct image keys (same key in API and form) ──
+    final List<String> directImageKeys = [
+      'frontWindshieldImages', 'roofImages', 'lhsHeadlampImages',
+      'lhsFoglampImages', 'rhsHeadlampImages', 'rhsFoglampImages',
+      'lhsFenderImages', 'lhsFrontTyreImages', 'lhsRunningBorderImages',
+      'lhsOrvmImages', 'lhsAPillarImages', 'lhsFrontDoorImages',
+      'lhsBPillarImages', 'lhsRearDoorImages', 'lhsCPillarImages',
+      'lhsRearTyreImages', 'spareTyreImages', 'bootFloorImages',
+      'rhsCPillarImages', 'rhsRearDoorImages', 'rhsBPillarImages',
+      'rhsFrontDoorImages', 'rhsAPillarImages', 'rhsRunningBorderImages',
+      'rhsFrontTyreImages', 'rhsRearTyreImages', 'rhsOrvmImages', 'rhsFenderImages',
+      'batteryImages', 'sunroofImages', 'lhsTailLampImages', 'rhsTailLampImages',
+      'rearWindshieldImages', 'chassisEmbossmentImages', 'vinPlateImages',
+      'roadTaxImages', 'pucImages', 'rtoNocImages', 'rtoForm28Images',
+      'frontWiperAndWasherImages', 'lhsRearFogLampImages', 'rhsRearFogLampImages',
+      'rearWiperAndWasherImages', 'spareWheelImages', 'cowlTopImages',
+      'firewallImages', 'acImages', 'reverseCameraImages',
+      'odometerReadingAfterTestDriveImages', 'bootDoorImages',
+    ];
+
+    // Helper to extract URL list from a value
+    List<String> extractUrls(dynamic value) {
+      if (value == null) return [];
+      if (value is List) {
+        return value
+            .map((e) => e.toString())
+            .where((url) => url.startsWith('http'))
+            .toList();
+      }
+      if (value is String && value.startsWith('http')) return [value];
+      return [];
+    }
+
+    // 1. Process mapped image keys
+    imageMappings.forEach((apiKey, formKey) {
+      final urls = extractUrls(carData[apiKey]);
+      if (urls.isNotEmpty) {
+        imageFiles[formKey] = urls;
+        carData[formKey] = urls; // also put in form data for consistency
+      }
+    });
+
+    // 2. Process direct image keys
+    for (final key in directImageKeys) {
+      final urls = extractUrls(carData[key]);
+      if (urls.isNotEmpty) {
+        imageFiles[key] = urls;
+      }
+    }
+
+    // 3. Handle split image fields
+    // bonnetImages → bonnetClosedImages + bonnetOpenImages
+    final bonnetImgs = extractUrls(carData['bonnetImages']);
+    if (bonnetImgs.isNotEmpty) {
+      // First half → bonnetClosedImages, second half → bonnetOpenImages
+      final mid = (bonnetImgs.length / 2).ceil();
+      imageFiles['bonnetClosedImages'] = bonnetImgs.sublist(0, mid);
+      if (bonnetImgs.length > mid) {
+        imageFiles['bonnetOpenImages'] = bonnetImgs.sublist(mid);
+      }
+    }
+    // Also check direct new-API keys
+    final bonnetClosed = extractUrls(carData['bonnetClosedImages']);
+    if (bonnetClosed.isNotEmpty) imageFiles['bonnetClosedImages'] = bonnetClosed;
+    final bonnetOpen = extractUrls(carData['bonnetOpenImages']);
+    if (bonnetOpen.isNotEmpty) imageFiles['bonnetOpenImages'] = bonnetOpen;
+
+    // frontBumperImages → frontBumperLhs45DegreeImages + frontBumperRhs45DegreeImages + frontBumperImages
+    final fbLhs45 = extractUrls(carData['frontBumperLhs45DegreeImages']);
+    if (fbLhs45.isNotEmpty) imageFiles['frontBumperLhs45DegreeImages'] = fbLhs45;
+    final fbRhs45 = extractUrls(carData['frontBumperRhs45DegreeImages']);
+    if (fbRhs45.isNotEmpty) imageFiles['frontBumperRhs45DegreeImages'] = fbRhs45;
+    final fbMain = extractUrls(carData['frontBumperImages']);
+    if (fbMain.isNotEmpty && imageFiles['frontBumperLhs45DegreeImages'] == null) {
+      imageFiles['frontBumperImages'] = fbMain;
+    }
+
+    // rearBumperImages → rearBumperLhs45DegreeImages + rearBumperRhs45DegreeImages + rearBumperImages
+    final rbLhs45 = extractUrls(carData['rearBumperLhs45DegreeImages']);
+    if (rbLhs45.isNotEmpty) imageFiles['rearBumperLhs45DegreeImages'] = rbLhs45;
+    final rbRhs45 = extractUrls(carData['rearBumperRhs45DegreeImages']);
+    if (rbRhs45.isNotEmpty) imageFiles['rearBumperRhs45DegreeImages'] = rbRhs45;
+    // Always populate the main rearBumperImages from DB if available
+    final rbMain = extractUrls(carData['rearBumperImages']);
+    if (rbMain.isNotEmpty) {
+      imageFiles['rearBumperImages'] = rbMain;
+    }
+
+    // lhsQuarterPanelImages — always populate from DB if available
+    final lhsQPWithDoor = extractUrls(carData['lhsQuarterPanelWithRearDoorOpenImages']);
+    if (lhsQPWithDoor.isNotEmpty) imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = lhsQPWithDoor;
+    final lhsQPMain = extractUrls(carData['lhsQuarterPanelImages']);
+    if (lhsQPMain.isNotEmpty) {
+      imageFiles['lhsQuarterPanelImages'] = lhsQPMain;
+    }
+
+    // rhsQuarterPanelImages — always populate from DB if available
+    final rhsQPWithDoor = extractUrls(carData['rhsQuarterPanelWithRearDoorOpenImages']);
+    if (rhsQPWithDoor.isNotEmpty) imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = rhsQPWithDoor;
+    final rhsQPMain = extractUrls(carData['rhsQuarterPanelImages']);
+    if (rhsQPMain.isNotEmpty) {
+      imageFiles['rhsQuarterPanelImages'] = rhsQPMain;
+    }
+
+    // apronLhsRhs → lhsApronImages + rhsApronImages
+    final apronAll = extractUrls(carData['apronLhsRhs']);
+    if (apronAll.isNotEmpty) {
+      final mid = (apronAll.length / 2).ceil();
+      imageFiles['lhsApronImages'] = apronAll.sublist(0, mid);
+      if (apronAll.length > mid) {
+        imageFiles['rhsApronImages'] = apronAll.sublist(mid);
+      }
+    }
+    final lhsApron = extractUrls(carData['lhsApronImages']);
+    if (lhsApron.isNotEmpty) imageFiles['lhsApronImages'] = lhsApron;
+    final rhsApron = extractUrls(carData['rhsApronImages']);
+    if (rhsApron.isNotEmpty) imageFiles['rhsApronImages'] = rhsApron;
+
+    // Boot Door Open: check multiple possible DB keys
+    final bootOpenList = extractUrls(carData['rearWithBootDoorOpenImages']);
+    final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages']);
+    
+    if (bootOpenList.isNotEmpty) {
+      imageFiles['rearWithBootDoorOpenImages'] = bootOpenList;
+    } else if (bootOpenListAlt.isNotEmpty) {
+      imageFiles['rearWithBootDoorOpenImages'] = bootOpenListAlt;
+    } else {
+      // Fallback: use the single-string field rearWithBootDoorOpen
+      final rearBoot = carData['rearWithBootDoorOpen'];
+      if (rearBoot is String && rearBoot.startsWith('http')) {
+        imageFiles['rearWithBootDoorOpenImages'] = [rearBoot];
+      }
+    }
+
+    // airbags array → individual airbag image fields
+    final airbagUrls = extractUrls(carData['airbags']);
+    final airbagKeys = [
+      'airbagImages', 'coDriverAirbagImages', 'driverSeatAirbagImages',
+      'coDriverSeatAirbagImages', 'rhsCurtainAirbagImages', 'lhsCurtainAirbagImages',
+      'driverKneeAirbagImages', 'coDriverKneeAirbagImages',
+      'rhsRearSideAirbagImages', 'lhsRearSideAirbagImages',
+    ];
+    for (int i = 0; i < airbagUrls.length && i < airbagKeys.length; i++) {
+      if (airbagUrls[i].isNotEmpty) {
+        imageFiles[airbagKeys[i]] = [airbagUrls[i]];
+      }
+    }
+    // Also check individual airbag image keys from new API format
+    for (final key in airbagKeys) {
+      final urls = extractUrls(carData[key]);
+      if (urls.isNotEmpty) imageFiles[key] = urls;
+    }
+
     imageFiles.refresh();
-    // debugPrint(
-    // '📸 Media pre-fill complete. Fields populated: ${imageFiles.keys.length}',
-    // );
+    debugPrint('✅ _preFillMedia completed: ${imageFiles.keys.length} image fields populated');
   }
 
   Future<void> fetchDropdownList() async {
@@ -900,14 +937,14 @@ class InspectionFormController extends GetxController {
         'appointmentId': appointmentId,
         'registrationNumber': schedule?.carRegistrationNumber ?? '',
         'yearMonthOfManufacture': schedule?.yearOfManufacture ?? '',
-        'odometerReadingInKms': schedule?.odometerReadingInKms ?? 0,
+        'odometerReadingInKms': schedule?.odometerReadingInKms.toString() ?? '',
         'customerName': schedule?.ownerName ?? '',
         'customerPhone': schedule?.customerContactNumber ?? '',
         'city': schedule?.city ?? '',
         'make': '',
         'model': '',
         'variant': '',
-        'ownerSerialNumber': schedule?.ownershipSerialNumber ?? 1,
+        'ownerSerialNumber': schedule?.ownershipSerialNumber.toString() ?? '',
       },
     );
   }
@@ -948,6 +985,12 @@ class InspectionFormController extends GetxController {
       _snapshotLockedFieldsKey,
       apiFetchedLockedFields.toList(),
     );
+
+    // Persist Re-Inspection specific state
+    await _storage.write(_snapshotOriginalDataKey, _originalData);
+    if (_reInspectionCarId != null) {
+      await _storage.write(_snapshotCarIdKey, _reInspectionCarId);
+    }
   }
 
   // ─── Field Operations ───
@@ -1048,8 +1091,10 @@ class InspectionFormController extends GetxController {
       );
       if (picked != null) {
         // Navigation to ImageEditorScreen (Manual Blur & Watermarking)
-        final String? editedPath = await Get.to(() => ImageEditorScreen(imagePath: picked.path));
-        
+        final String? editedPath = await Get.to(
+          () => ImageEditorScreen(imagePath: picked.path),
+        );
+
         if (editedPath != null && editedPath.isNotEmpty) {
           final currentList = imageFiles[key] ?? [];
           currentList.add(editedPath);
@@ -1335,7 +1380,7 @@ class InspectionFormController extends GetxController {
   }) async {
     try {
       // debugPrint(
-      // '� API CALL: Deleting ${isVideo ? 'video' : 'image'} from Cloudinary',
+      // ' API CALL: Deleting ${isVideo ? 'video' : 'image'} from Cloudinary',
       // );
       // debugPrint('📍 Target: $localInfo (PublicID: $publicId)');
 
@@ -1345,12 +1390,152 @@ class InspectionFormController extends GetxController {
       final response = await ApiService.delete(url, {'publicId': publicId});
 
       // Print full API response
-      // debugPrint('� API RESPONSE (Delete $localInfo): $response');
+      // debugPrint(' API RESPONSE (Delete $localInfo): $response');
 
       // debugPrint('✅ SUCCESS: Remote file deleted.');
     } catch (e) {
       // debugPrint('❌ ERROR: Delete failed for $localInfo: $e');
     }
+  }
+
+  // ─── Visibility & Requirements ───
+
+  /// Returns whether a field should be visible based on current form state.
+  bool isFieldVisible(String key) {
+    final data = inspectionData.value;
+    if (data == null) return true;
+
+    // RC Condition visibility logic
+    if (key == 'rcCondition') {
+      final rcBookVal = getFieldValue('rcBookAvailability');
+      return (rcBookVal == 'Original' || rcBookVal == 'Duplicate');
+    }
+
+    // RTO Form 28 visibility logic
+    if (key == 'rtoForm28') {
+      final rtoNocVal = getFieldValue('rtoNoc');
+      return (rtoNocVal != 'Not Applicable');
+    }
+
+    // Tax Valid Till visibility logic
+    if (key == 'taxValidTill') {
+      final taxVal = getFieldValue('roadTaxValidity');
+      return (taxVal == 'Limited Period');
+    }
+
+    // Hypothecated To visibility logic
+    if (key == 'hypothecatedTo') {
+      final hypVal = getFieldValue('hypothecationDetails').trim().toLowerCase();
+      return (hypVal != 'no' &&
+          hypVal != 'not hypothecated' &&
+          hypVal.isNotEmpty);
+    }
+
+    // Duplicate Key Images visibility logic
+    if (key == 'duplicateKeyImages') {
+      final dupKeyVal = getFieldValue('duplicateKey');
+      return (dupKeyVal == 'Duplicate Key Available' ||
+          dupKeyVal == 'Available');
+    }
+
+    // Standard Visibility Mappings
+    final visibilityRules = {
+      'lhsFoglampImages': 'lhsFoglamp',
+      'rhsFoglampImages': 'rhsFoglamp',
+      'lhsRearFogLampImages': 'lhsRearFogLamp',
+      'rhsRearFogLampImages': 'rhsRearFogLamp',
+      'rearWiperAndWasherImages': 'rearWiperWasher',
+      'reverseCameraImages': 'reverseCamera',
+      'sunroofImages': 'sunroof',
+      'lhsOrvmImages': 'lhsOrvm',
+      'rhsOrvmImages': 'rhsOrvm',
+      'spareWheelImages': 'spareWheel',
+      'spareTyreImages': 'spareTyre',
+      'airbagImages': 'airbagFeaturesDriverSide',
+      'coDriverAirbagImages': 'airbagFeaturesCoDriverSide',
+      'driverSeatAirbagImages': 'driverSeatAirbag',
+      'coDriverSeatAirbagImages': 'coDriverSeatAirbag',
+      'rhsCurtainAirbagImages': 'rhsCurtainAirbag',
+      'lhsCurtainAirbagImages': 'lhsCurtainAirbag',
+      'driverKneeAirbagImages': 'driverSideKneeAirbag',
+      'coDriverKneeAirbagImages': 'coDriverKneeSeatAirbag',
+      'rhsRearSideAirbagImages': 'rhsRearSideAirbag',
+      'lhsRearSideAirbagImages': 'lhsRearSideAirbag',
+      'insuranceImages': 'insurance',
+    };
+
+    if (visibilityRules.containsKey(key)) {
+      final parentKey = visibilityRules[key]!;
+      final parentVal = getFieldValue(parentKey);
+
+      // Rule: Not applicable or Not available
+      if (parentVal == 'Not applicable' ||
+          parentVal == 'Not Applicable' ||
+          parentVal == 'Not available' ||
+          parentVal == 'Not Available' ||
+          parentVal == 'N/A' ||
+          parentVal == 'Not Present' ||
+          parentVal == 'Policy Not Available') {
+        return false;
+      }
+    }
+
+    // --- Master Airbag Rule ---
+    final airbagRelatedFields = [
+      'airbagFeaturesDriverSide',
+      'airbagImages',
+      'airbagFeaturesCoDriverSide',
+      'coDriverAirbagImages',
+      'driverSeatAirbag',
+      'driverSeatAirbagImages',
+      'coDriverSeatAirbag',
+      'coDriverSeatAirbagImages',
+      'rhsCurtainAirbag',
+      'rhsCurtainAirbagImages',
+      'lhsCurtainAirbag',
+      'lhsCurtainAirbagImages',
+      'driverSideKneeAirbag',
+      'driverKneeAirbagImages',
+      'coDriverKneeSeatAirbag',
+      'coDriverKneeAirbagImages',
+      'rhsRearSideAirbag',
+      'rhsRearSideAirbagImages',
+      'lhsRearSideAirbag',
+      'lhsRearSideAirbagImages',
+    ];
+
+    if (airbagRelatedFields.contains(key)) {
+      final noOfAirbags = getFieldValue('noOfAirBags');
+      if (noOfAirbags == 'Not applicable' || noOfAirbags == 'Not Applicable') {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  /// Helper to convert a date to IST and format as UTC ISO string (ending in Z)
+  /// as requested by backend for consistency.
+  String _dateToIstUtcIso(DateTime date) {
+    // Add 5:30 to UTC to represent IST moment as UTC string
+    final istDate = date.toUtc().add(const Duration(hours: 5, minutes: 30));
+    // Remove milliseconds and append Z
+    return istDate.toIso8601String().split('.').first + 'Z';
+  }
+
+  /// Returns whether a field is required (i.e. not hidden and not optional).
+  bool isFieldRequired(String key) {
+    if (!isFieldVisible(key)) return false;
+
+    // Find the field definition
+    for (final section in InspectionFieldDefs.sections) {
+      for (final field in section.fields) {
+        if (field.key == key) {
+          return !field.optional && !field.readonly;
+        }
+      }
+    }
+    return false;
   }
 
   List<String> getImages(String key) {
@@ -1367,8 +1552,8 @@ class InspectionFormController extends GetxController {
     final section = InspectionFieldDefs.sections[sectionIndex];
 
     for (final field in section.fields) {
-      // Skip optional or readonly fields
-      if (field.optional || field.readonly) continue;
+      // Use localized requirement check
+      if (!isFieldRequired(field.key)) continue;
 
       // Special check for image/video fields
       if (field.type == FType.image || field.type == FType.video) {
@@ -1390,19 +1575,14 @@ class InspectionFormController extends GetxController {
   // ─── Navigation ───
   void nextSection() {
     if (currentSectionIndex.value < sectionCount - 1) {
-      // ENFORCEMENT: Only move forward if current section is valid (starting from index 1: Front)
-      // We also enforce for index 0 if needed, but per request "from No: 2 front"
-      // If we want to allow going from 0 to 1 freely, we check index > 0.
-      if (currentSectionIndex.value >= 1) {
+      // ENFORCEMENT: Only move forward if current section is valid (starting from index 0)
+      if (currentSectionIndex.value >= 0) {
         final missing = getUnfilledRequiredFields(currentSectionIndex.value);
         if (missing.isNotEmpty) {
-          Get.snackbar(
-            'Incomplete Section',
-            'Please complete: ${missing.take(3).join(", ")}${missing.length > 3 ? "..." : ""}',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.orange.shade700,
-            colorText: Colors.white,
-            duration: const Duration(seconds: 3),
+          TLoaders.warningSnackBar(
+            title: 'Incomplete Section',
+            message:
+                'Please complete: ${missing.take(3).join(", ")}${missing.length > 3 ? "..." : ""}',
           );
           return;
         }
@@ -1430,20 +1610,19 @@ class InspectionFormController extends GetxController {
 
   void jumpToSection(int index) {
     // ENFORCEMENT: If moving forward, must pass validation of current and intermediary sections
-    if (index > currentSectionIndex.value && currentSectionIndex.value >= 1) {
+    if (index > currentSectionIndex.value && currentSectionIndex.value >= 0) {
       // Loop through sections between current and target to ensure no skip
       for (int i = currentSectionIndex.value; i < index; i++) {
         final missing = getUnfilledRequiredFields(i);
         if (missing.isNotEmpty) {
-          Get.snackbar(
-            'Section Incomplete',
-            'Please complete ${InspectionFieldDefs.sections[i].title} first.',
-            snackPosition: SnackPosition.BOTTOM,
-            backgroundColor: Colors.orange.shade700,
-            colorText: Colors.white,
+          TLoaders.warningSnackBar(
+            title: 'Section Incomplete',
+            message:
+                'Please complete ${InspectionFieldDefs.sections[i].title} first.',
           );
-          // Jump to the first incomplete section instead? 
-          // For now, just block.
+          // Jump to the first incomplete section to prompt the user
+          currentSectionIndex.value = i;
+          pageController.jumpToPage(i);
           return;
         }
       }
@@ -1545,77 +1724,8 @@ class InspectionFormController extends GetxController {
     final missingBySection = <String, List<Map<String, String>>>{};
     for (final section in InspectionFieldDefs.sections) {
       for (final field in section.fields) {
-        // 1. Skip if field should technically be hidden (Optional/Dynamic logic)
-        if (field.optional) continue;
-
-        // RC Condition visibility logic
-        if (field.key == 'rcCondition') {
-          final rcBookVal = getFieldValue('rcBookAvailability');
-          if (rcBookVal != 'Original' && rcBookVal != 'Duplicate') continue;
-        }
-
-        // RTO Form 28 visibility logic
-        if (field.key == 'rtoForm28') {
-          final rtoNocVal = getFieldValue('rtoNoc');
-          if (rtoNocVal == 'Not Applicable') continue;
-        }
-
-        // Tax Valid Till visibility logic
-        if (field.key == 'taxValidTill') {
-          final taxVal = getFieldValue('roadTaxValidity');
-          if (taxVal != 'Limited Period') continue;
-        }
-
-        // Hypothecated To visibility logic
-        if (field.key == 'hypothecatedTo') {
-          final hypVal = getFieldValue('hypothecationDetails');
-          if (hypVal == 'No' || hypVal == 'Not Hypothecated') continue;
-        }
-
-        // Conditional requirements for images based on Not Applicable/Not Present selection
-        final parentFields = {
-          'lhsFoglampImages': 'lhsFoglamp',
-          'rhsFoglampImages': 'rhsFoglamp',
-          'lhsRearFogLampImages': 'lhsRearFogLamp',
-          'rhsRearFogLampImages': 'rhsRearFogLamp',
-          'rearWiperAndWasherImages': 'rearWiperWasher',
-          'reverseCameraImages': 'reverseCamera',
-          'sunroofImages': 'sunroof',
-          'airbagImages': 'airbagFeaturesDriverSide',
-          'coDriverAirbagImages': 'airbagFeaturesCoDriverSide',
-          'driverSeatAirbagImages': 'driverSeatAirbag',
-          'coDriverSeatAirbagImages': 'coDriverSeatAirbag',
-          'rhsCurtainAirbagImages': 'rhsCurtainAirbag',
-          'lhsCurtainAirbagImages': 'lhsCurtainAirbag',
-          'driverKneeAirbagImages': 'driverSideKneeAirbag',
-          'coDriverKneeAirbagImages': 'coDriverKneeSeatAirbag',
-          'rhsRearSideAirbagImages': 'rhsRearSideAirbag',
-          'lhsRearSideAirbagImages': 'lhsRearSideAirbag',
-          'spareWheelImages': 'spareWheel',
-          'spareTyreImages': 'spareTyre',
-          'insuranceImages': 'insurance',
-        };
-
-        if (parentFields.containsKey(field.key)) {
-          final parentVal = getFieldValue(parentFields[field.key]!);
-          if (parentVal == 'Not Applicable' ||
-              parentVal == 'Not Available' ||
-              parentVal == 'Not Present' ||
-              parentVal == 'Policy Not Available' ||
-              parentVal == 'No' ||
-              parentVal == 'N/A') {
-            continue;
-          }
-        }
-
-        // Duplicate Key Images requirement
-        if (field.key == 'duplicateKeyImages') {
-          final dupKeyVal = getFieldValue('duplicateKey');
-          if (dupKeyVal != 'Duplicate Key Available' &&
-              dupKeyVal != 'Available') {
-            continue;
-          }
-        }
+        // Use localized requirement check
+        if (!isFieldRequired(field.key)) continue;
 
         // 2. Perform Validation
         if (field.type == FType.image || field.type == FType.video) {
@@ -1868,22 +1978,25 @@ class InspectionFormController extends GetxController {
       // 3. Convert CarModel to JSON payload
       final payload = carModel.toJson();
 
-      // 🔍 DEBUG: Trace bootDoorImages through the pipeline
+      // 🔍 DEBUG: Trace odometer and bootDoorImages through the pipeline
       // debugPrint('═══════════════════════════════════════════════');
-      // debugPrint('🔍 BOOT DOOR IMAGES DEBUG:');
-      // debugPrint('  imageFiles[bootDoorImages] = ${imageFiles['bootDoorImages']}');
-      // debugPrint('  carModel.bootDoorImages = ${carModel.bootDoorImages}');
-      // debugPrint('  payload[bootDoorImages] (from toJson) = ${payload['bootDoorImages']}');
+      // debugPrint('🔍 ODOMETER DEBUG:');
+      // debugPrint('  imageFiles[odometerReadingAfterTestDriveImages] = ${imageFiles['odometerReadingAfterTestDriveImages']}');
+      // debugPrint('  carModel.odometerReadingAfterTestDriveImages = ${carModel.odometerReadingAfterTestDriveImages}');
+      // debugPrint('  payload[odometerReadingAfterTestDriveImages] = ${payload['odometerReadingAfterTestDriveImages']}');
       // debugPrint('═══════════════════════════════════════════════');
 
       // Add image URLs from Cloudinary uploads
       imageFiles.forEach((key, paths) {
         if (paths.isNotEmpty) {
           final resolvedUrls =
-              paths.map((p) {
-                final url = mediaCloudinaryData[p]?['url'] ?? p;
-                return url.startsWith('http') ? url : '';
-              }).where((item) => item.isNotEmpty).toList();
+              paths
+                  .map((p) {
+                    final url = mediaCloudinaryData[p]?['url'] ?? p;
+                    return url.startsWith('http') ? url : '';
+                  })
+                  .where((item) => item.isNotEmpty)
+                  .toList();
           payload[key] = resolvedUrls;
         }
       });
@@ -1891,13 +2004,14 @@ class InspectionFormController extends GetxController {
       // 🔍 DEBUG: bootDoorImages after imageFiles overlay
       // debugPrint('🔍 payload[bootDoorImages] (after overlay) = ${payload['bootDoorImages']}');
 
-
       // Ensure status is set to Inspected in the Car collection
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
-      
-      // Ensure timestamp is set
-      payload['timestamp'] = DateTime.now().toUtc().toIso8601String();
+
+      // Ensure timestamp and inspectionDate represent IST but in UTC format
+      final nowIstUtc = _dateToIstUtcIso(DateTime.now());
+      payload['timestamp'] = nowIstUtc;
+      payload['inspectionDate'] = nowIstUtc;
 
       // Debug: dump date values in payload
       // debugPrint('📅 DATE VALUES IN PAYLOAD:');
@@ -1992,12 +2106,8 @@ class InspectionFormController extends GetxController {
             'inspectionStatus': 'Inspected',
             'status': 'Inspected',
             'remarks': schedule!.remarks ?? '',
+            'inspectionDateTime': nowIstUtc,
           };
-
-          if (schedule!.inspectionDateTime != null) {
-            statusBody['inspectionDateTime'] =
-                schedule!.inspectionDateTime!.toIso8601String();
-          }
 
           // debugPrint('📡 PUT ${ApiConstants.updateTelecallingUrl}');
           // debugPrint('📦 Body: $statusBody');
@@ -2020,7 +2130,9 @@ class InspectionFormController extends GetxController {
       } catch (e) {
         // debugPrint('⚠️ Failed to update telecalling status: $e');
         // Let user know but don't block success
-        TLoaders.customToast(message: "Car submitted, but failed to update lead status: $e");
+        TLoaders.customToast(
+          message: "Car submitted, but failed to update lead status: $e",
+        );
       }
 
       // 7. Show stunning success dialog
@@ -2665,10 +2777,13 @@ class InspectionFormController extends GetxController {
       imageFiles.forEach((key, paths) {
         if (paths.isNotEmpty) {
           final resolvedUrls =
-              paths.map((p) {
-                final url = mediaCloudinaryData[p]?['url'] ?? p;
-                return url.startsWith('http') ? url : '';
-              }).where((item) => item.isNotEmpty).toList();
+              paths
+                  .map((p) {
+                    final url = mediaCloudinaryData[p]?['url'] ?? p;
+                    return url.startsWith('http') ? url : '';
+                  })
+                  .where((item) => item.isNotEmpty)
+                  .toList();
           payload[key] = resolvedUrls;
         }
       });
@@ -2752,7 +2867,9 @@ class InspectionFormController extends GetxController {
         }
       } catch (e) {
         // debugPrint('⚠️ Failed to update telecalling status: $e');
-        TLoaders.customToast(message: "Re-Inspection submitted, but lead status update failed: $e");
+        TLoaders.customToast(
+          message: "Re-Inspection submitted, but lead status update failed: $e",
+        );
       }
 
       // 7. Show success dialog
@@ -3310,9 +3427,21 @@ class InspectionFormController extends GetxController {
             if (record is Map<String, dynamic> &&
                 record['appointmentId']?.toString() == appointmentId) {
               // Found the matching record — extract make/model/variant
-              final make = (record['maker_name'] ?? record['make'] ?? '').toString().trim();
-              final model = (record['maker_model'] ?? record['model'] ?? '').toString().trim();
-              final variant = (record['variant_name'] ?? record['variant'] ?? record['series'] ?? '').toString().trim();
+              final make =
+                  (record['maker_name'] ?? record['make'] ?? '')
+                      .toString()
+                      .trim();
+              final model =
+                  (record['maker_model'] ?? record['model'] ?? '')
+                      .toString()
+                      .trim();
+              final variant =
+                  (record['variant_name'] ??
+                          record['variant'] ??
+                          record['series'] ??
+                          '')
+                      .toString()
+                      .trim();
 
               final data = inspectionData.value;
               if (data != null) {
@@ -3521,13 +3650,18 @@ class InspectionFormController extends GetxController {
     });
 
     // ── Blacklist Status: Boolean/String → "Yes"/"No" ──
-    final blacklistValue = find(['blacklistStatus', 'is_blacklisted', 'blacklist_details']);
+    final blacklistValue = find([
+      'blacklistStatus',
+      'is_blacklisted',
+      'blacklist_details',
+    ]);
     if (blacklistValue != null) {
-      final isBlacklisted = (blacklistValue == true || 
-                             blacklistValue.toString().toLowerCase() == 'true' ||
-                             blacklistValue.toString() == '1' ||
-                             blacklistValue.toString().toLowerCase() == 'yes');
-      
+      final isBlacklisted =
+          (blacklistValue == true ||
+              blacklistValue.toString().toLowerCase() == 'true' ||
+              blacklistValue.toString() == '1' ||
+              blacklistValue.toString().toLowerCase() == 'yes');
+
       updateField('blacklistStatus', isBlacklisted ? 'Yes' : 'No');
       updatedAny = true;
     } else {
@@ -3539,11 +3673,12 @@ class InspectionFormController extends GetxController {
     // ── 0. Hypothecation Details: boolean 'financed' → "Yes"/"No" ──
     final financedValue = find(['financed', 'is_financed', 'hypothecated']);
     if (financedValue != null) {
-      final isFinanced = (financedValue == true || 
-                          financedValue.toString().toLowerCase() == 'true' ||
-                          financedValue.toString() == '1' ||
-                          financedValue.toString().toLowerCase() == 'yes');
-      
+      final isFinanced =
+          (financedValue == true ||
+              financedValue.toString().toLowerCase() == 'true' ||
+              financedValue.toString() == '1' ||
+              financedValue.toString().toLowerCase() == 'yes');
+
       final hypothecationValue = isFinanced ? 'Yes' : 'No';
       updateField('hypothecationDetails', hypothecationValue);
       updatedAny = true;
@@ -3627,7 +3762,6 @@ class InspectionFormController extends GetxController {
     }
 
     // Note: Make / Model / Variant are now handled by _applyMakeModelVariantFromApi()
-
 
     if (updatedAny) {
       inspectionData.refresh();

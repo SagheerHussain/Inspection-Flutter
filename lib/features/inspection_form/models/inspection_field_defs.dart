@@ -142,6 +142,7 @@ class InspectionFieldDefs {
         F.text('appointmentId', 'Appointment ID', readonly: true),
         F.text('city', 'City'),
         F.text('registrationNumber', 'Registration Number'),
+        // F.text('registrationType', 'Registration Type', optional: true),
         F.drop('toBeScrapped', 'To Be Scrapped', ['Yes', 'No']),
         F.multi('chassisDetails', 'Chassis Details', []),
         F.img('chassisEmbossmentImages', 'Chassis Embossment Image'),
@@ -213,6 +214,8 @@ class InspectionFieldDefs {
         F.text('insurer', 'Insured By'),
         F.text('insurancePolicyNumber', 'Policy Number'),
         F.img('insuranceImages', 'Insurance Image'),
+        // F.text('noClaimBonus', 'No Claim Bonus', optional: true),
+        // F.text('mismatchInInsurance', 'Mismatch In Insurance', optional: true),
         F.date('pucValidity', 'PUC Validity'),
         F.text('pucNumber', 'PUC Number'),
         F.img('pucImages', 'PUC Image', optional: true),
@@ -476,14 +479,14 @@ class InspectionFieldDefs {
           'Replaced',
         ]),
         F.img('rearWindshieldImages', 'Rear Windshield Image'),
-        F.multi('bootDoor', 'Boot Door', [
+        /* F.multi('bootDoor', 'Boot Door', [
           'OK',
           'Dent',
           'Scratch',
           'Repaint',
           'Replaced',
         ]),
-        F.img('bootDoorImages', 'Boot Door Image'),
+        F.img('bootDoorImages', 'Boot Door Image'), */
         F.img('rearWithBootDoorOpenImages', 'Boot Door Open Image'),
         F.multi('spareWheel', 'Spare Wheel', ['Available', 'Not Available']),
         F.img('spareWheelImages', 'Spare Wheel Image'),
@@ -759,10 +762,13 @@ class InspectionFieldDefs {
           'Crack',
           'Damaged',
         ]),
-        F.multi('infotainmentSystem', 'Infotainment System', [
+        F.text('electricals', 'Electricals', optional: true),
+        F.text('commentsOnElectricals', 'Comments on Electricals', optional: true),
+        F.multi('musicSystem', 'Music System', [
           'Working',
           'Not Working',
           'Not Available',
+          'N/A',
         ]),
         F.drop('inbuiltSpeaker', 'Inbuilt Speaker', [
           'OK',
@@ -946,6 +952,8 @@ class InspectionFieldDefs {
           'Synthetic',
           'Mixed',
         ]),
+        F.text('leatherSeats', 'Leather Seats', optional: true),
+        F.text('fabricSeats', 'Fabric Seats', optional: true),
         F.multi('driverSeat', 'Driver Seat', ['OK', 'Torn', 'Stained', 'Worn']),
         F.multi('coDriverSeat', 'Co-Driver Seat', [
           'OK',

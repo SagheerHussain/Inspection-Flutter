@@ -395,18 +395,22 @@ class _ProgressBar extends StatelessWidget {
                           color: Colors.green.shade600,
                         ),
                       ),
-                    Text(
-                      '${index + 1}. ${controller.sectionTitles[index]}',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight:
-                            isSelected ? FontWeight.bold : FontWeight.w500,
-                        color:
-                            isSelected
-                                ? _accent
-                                : (isCompleted
-                                    ? Colors.green.shade700
-                                    : Colors.grey.shade600),
+                    Flexible(
+                      child: Text(
+                        '${index + 1}. ${controller.sectionTitles[index]}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight:
+                              isSelected ? FontWeight.bold : FontWeight.w500,
+                          color:
+                              isSelected
+                                  ? _accent
+                                  : (isCompleted
+                                      ? Colors.green.shade700
+                                      : Colors.grey.shade600),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ],
@@ -496,81 +500,17 @@ class _SectionPageState extends State<_SectionPage> {
             sectionNumber: widget.sectionIndex + 1,
             totalSections: widget.controller.sectionCount,
           ),
+          const SizedBox(height: 12),
           const SizedBox(height: 20),
           ...widget.section.fields.map((field) {
             if (field.key == 'inspectionDate') return const SizedBox.shrink();
 
-            // Define fields that have dynamic visibility
-            final visibilityParents = {
-              'rcCondition': 'rcBookAvailability',
-              'rtoForm28': 'rtoNoc',
-              'duplicateKeyImages': 'duplicateKey',
-              'taxValidTill': 'roadTaxValidity',
-              'hypothecatedTo': 'hypothecationDetails',
-              // Interior / Airbags
-              'airbagImages': 'airbagFeaturesDriverSide',
-              'coDriverAirbagImages': 'airbagFeaturesCoDriverSide',
-              'driverSeatAirbagImages': 'driverSeatAirbag',
-              'coDriverSeatAirbagImages': 'coDriverSeatAirbag',
-              'rhsCurtainAirbagImages': 'rhsCurtainAirbag',
-              'lhsCurtainAirbagImages': 'lhsCurtainAirbag',
-              'driverKneeAirbagImages': 'driverSideKneeAirbag',
-              'coDriverKneeAirbagImages': 'coDriverKneeSeatAirbag',
-              'rhsRearSideAirbagImages': 'rhsRearSideAirbag',
-              'lhsRearSideAirbagImages': 'lhsRearSideAirbag',
-              // Exterior / Electricals
-              'lhsFoglampImages': 'lhsFoglamp',
-              'rhsFoglampImages': 'rhsFoglamp',
-              'lhsRearFogLampImages': 'lhsRearFogLamp',
-              'rhsRearFogLampImages': 'rhsRearFogLamp',
-              'rearWiperAndWasherImages': 'rearWiperWasher',
-              'reverseCameraImages': 'reverseCamera',
-              'sunroofImages': 'sunroof',
-              'insuranceImages': 'insurance',
-            };
-
-            Widget fieldWidget;
-            if (visibilityParents.containsKey(field.key)) {
-              fieldWidget = Obx(() {
-                final parentKey = visibilityParents[field.key]!;
-                final parentVal = widget.controller.getFieldValue(parentKey);
-
-                if (field.key == 'rcCondition') {
-                  if (parentVal != 'Original' && parentVal != 'Duplicate') {
-                    return const SizedBox.shrink();
-                  }
-                } else if (field.key == 'rtoForm28') {
-                  if (parentVal == 'Not Applicable') {
-                    return const SizedBox.shrink();
-                  }
-                } else if (field.key == 'duplicateKeyImages') {
-                  if (parentVal != 'Duplicate Key Available' &&
-                      parentVal != 'Available') {
-                    return const SizedBox.shrink();
-                  }
-                } else if (field.key == 'taxValidTill') {
-                  if (parentVal != 'Limited Period') {
-                    return const SizedBox.shrink();
-                  }
-                } else if (field.key == 'hypothecatedTo') {
-                  final v = parentVal.trim().toLowerCase();
-                  if (v == 'no' || v == 'not hypothecated' || v.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                } else {
-                  if (parentVal == 'Not Applicable' ||
-                      parentVal == 'Not Available' ||
-                      parentVal == 'Not Present' ||
-                      parentVal == 'Policy Not Available') {
-                    return const SizedBox.shrink();
-                  }
-                }
-
-                return _buildField(field);
-              });
-            } else {
-              fieldWidget = _buildField(field);
-            }
+            final fieldWidget = Obx(() {
+              if (!widget.controller.isFieldVisible(field.key)) {
+                return const SizedBox.shrink();
+              }
+              return _buildField(field);
+            });
 
             // Wrap with GlobalKey and highlight animation
             final isHighlighted = _highlightedFieldKey == field.key;
@@ -1208,7 +1148,7 @@ class _BoundNumberFieldState extends State<_BoundNumberField> {
   void initState() {
     super.initState();
     final val = widget.controller.getFieldValue(widget.field.key);
-    _textController = TextEditingController(text: val == '0' ? '' : val);
+    _textController = TextEditingController(text: val);
   }
 
   @override
@@ -1221,7 +1161,7 @@ class _BoundNumberFieldState extends State<_BoundNumberField> {
   Widget build(BuildContext context) {
     return Obx(() {
       final val = widget.controller.getFieldValue(widget.field.key);
-      final displayVal = (val == '0' || val.isEmpty) ? '' : val;
+      final displayVal = val;
       if (_textController.text != displayVal) {
         _textController.text = displayVal;
       }
@@ -2556,57 +2496,46 @@ class _Footer extends StatelessWidget {
                       : null,
             ),
 
-            const Spacer(),
+            const SizedBox(width: 8),
 
             // Save Draft
-            controller.isSaving.value
-                ? Container(
-                  width: 48,
-                  height: 48,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange.shade200),
+            Expanded(
+              child: controller.isSaving.value
+                  ? Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.orange.shade700),
+                    ),
+                  )
+                  : _FooterButton(
+                    icon: Icons.save_rounded,
+                    label: 'Save',
+                    color: Colors.orange.shade700,
+                    onTap: isEnabled ? () => controller.saveInspection() : null,
                   ),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation(Colors.orange.shade700),
-                  ),
-                )
-                : _FooterButton(
-                  icon: Icons.save_rounded,
-                  label: 'Save',
-                  color: Colors.orange.shade700,
-                  onTap: isEnabled ? () => controller.saveInspection() : null,
-                ),
+            ),
 
-            const SizedBox(width: 12),
+            const SizedBox(width: 8),
 
             // Submit
-            controller.isSubmitting.value
-                ? Container(
-                  width: 48,
-                  height: 48,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
+            Expanded(
+              child: controller.isSubmitting.value
+                  ? Center(
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation(Colors.green.shade700),
+                    ),
+                  )
+                  : _FooterButton(
+                    icon: Icons.check_circle_rounded,
+                    label: 'Submit',
+                    color: Colors.green.shade700,
+                    onTap:
+                        isEnabled ? () => controller.submitInspection() : null,
                   ),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor: AlwaysStoppedAnimation(Colors.green.shade700),
-                  ),
-                )
-                : _FooterButton(
-                  icon: Icons.check_circle_rounded,
-                  label: 'Submit',
-                  color: Colors.green.shade700,
-                  onTap: isEnabled ? () => controller.submitInspection() : null,
-                ),
+            ),
 
-            const Spacer(),
+            const SizedBox(width: 8),
 
             // Next
             _FooterButton(
@@ -2650,8 +2579,8 @@ class _FooterButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: Container(
           padding: EdgeInsets.symmetric(
-            horizontal: compact ? 12 : 16,
-            vertical: 12,
+            horizontal: compact ? 8 : 12,
+            vertical: 11,
           ),
           decoration: BoxDecoration(
             color:
@@ -2677,7 +2606,7 @@ class _FooterButton extends StatelessWidget {
                   style: TextStyle(
                     color: effectiveColor,
                     fontWeight: FontWeight.w600,
-                    fontSize: 14.5,
+                    fontSize: 13,
                   ),
                 ),
               ],

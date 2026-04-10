@@ -1110,7 +1110,7 @@ class _ScheduleCard extends StatelessWidget {
           color: const Color(0xFF4CAF50),
           tooltip: isRunning ? 'Resume Inspection' : 'Start Inspection',
           onTap: () async {
-            if (isScheduled || isRescheduled || isReinspection) {
+            if (isScheduled || isRescheduled) {
               // Switch to Running via API as requested
               try {
                 // Keep existing values as requested
@@ -1280,153 +1280,327 @@ class _ScheduleCard extends StatelessWidget {
     Get.dialog(
       Dialog(
         backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
         child: Container(
-          padding: const EdgeInsets.all(24),
+          constraints: const BoxConstraints(maxWidth: 400),
           decoration: BoxDecoration(
             color: dark ? const Color(0xFF1E1E2E) : Colors.white,
-            borderRadius: BorderRadius.circular(28),
+            borderRadius: BorderRadius.circular(24),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.2),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+                spreadRadius: 0,
               ),
             ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withValues(alpha: 0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.cancel_rounded, color: Colors.red),
+              // ── Header ──
+              Container(
+                padding: const EdgeInsets.fromLTRB(20, 20, 12, 16),
+                decoration: BoxDecoration(
+                  color: dark
+                      ? Colors.red.withValues(alpha: 0.08)
+                      : const Color(0xFFFEF2F2),
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(24),
+                    topRight: Radius.circular(24),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Cancel Inspection',
-                          style: Theme.of(
-                            context,
-                          ).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: dark ? Colors.white : Colors.black87,
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Colors.red.shade400,
+                            Colors.red.shade600,
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.red.withValues(alpha: 0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.cancel_outlined,
+                        color: Colors.white,
+                        size: 22,
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Cancel Inspection',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: dark ? Colors.white : const Color(0xFF1E293B),
+                              fontSize: 17,
+                              letterSpacing: -0.2,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: dark
+                                  ? Colors.white.withValues(alpha: 0.08)
+                                  : const Color(0xFFF1F5F9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'ID: ${schedule.appointmentId}',
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: dark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // Close button
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () => Get.back(),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.06)
+                                : Colors.black.withValues(alpha: 0.04),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            Icons.close_rounded,
+                            size: 18,
+                            color: dark ? Colors.grey.shade400 : Colors.grey.shade600,
                           ),
                         ),
-                        Text(
-                          'Appointment ID: ${schedule.appointmentId}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Body ──
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Warning message
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: dark
+                            ? Colors.amber.withValues(alpha: 0.08)
+                            : const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: dark
+                              ? Colors.amber.withValues(alpha: 0.15)
+                              : const Color(0xFFFDE68A),
+                          width: 0.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline_rounded,
+                            size: 18,
+                            color: Colors.amber.shade700,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'This action cannot be undone. The inspection will be permanently cancelled.',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: dark ? Colors.amber.shade300 : Colors.amber.shade800,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Label
+                    Text(
+                      'Reason for cancellation',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        color: dark ? Colors.white : const Color(0xFF334155),
+                        letterSpacing: 0.1,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // Text field
+                    TextField(
+                      controller: reasonController,
+                      maxLines: 3,
+                      minLines: 3,
+                      style: TextStyle(
+                        color: dark ? Colors.white : const Color(0xFF1E293B),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.5,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Tell us why you are canceling...',
+                        hintStyle: TextStyle(
+                          color: dark ? Colors.grey.shade600 : Colors.grey.shade400,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        filled: true,
+                        fillColor: dark
+                            ? Colors.white.withValues(alpha: 0.04)
+                            : const Color(0xFFF8FAFC),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: dark
+                                ? Colors.white.withValues(alpha: 0.1)
+                                : const Color(0xFFE2E8F0),
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: Colors.red.shade300,
+                            width: 1.5,
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: () => Get.back(),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: dark ? Colors.grey.shade300 : const Color(0xFF475569),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              side: BorderSide(
+                                color: dark
+                                    ? Colors.white.withValues(alpha: 0.15)
+                                    : const Color(0xFFCBD5E1),
+                                width: 1.2,
+                              ),
+                            ),
+                            child: Text(
+                              'Keep It',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: dark ? Colors.grey.shade300 : const Color(0xFF475569),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red.shade500,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            onPressed: () async {
+                              if (reasonController.text.trim().isEmpty) {
+                                TLoaders.warningSnackBar(
+                                  title: 'Reason Required',
+                                  message: 'Please provide a reason for cancellation',
+                                );
+                                return;
+                              }
+                              Get.back();
+                              try {
+                                await controller.updateTelecallingStatus(
+                                  telecallingId: schedule.id,
+                                  status: InspectionStatuses.cancel,
+                                  remarks: reasonController.text.trim(),
+                                );
+                                // Redirect back to main dashboard
+                                Get.offAll(() => const CoursesDashboard());
+                              } catch (e) {
+                                // Error handled in controller
+                              }
+                            },
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.cancel_outlined, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Confirm Cancel',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Reason for cancellation',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                maxLines: 4,
-                style: TextStyle(color: dark ? Colors.white : Colors.black87),
-                decoration: InputDecoration(
-                  hintText: 'Tell us why you are canceling...',
-                  hintStyle: TextStyle(color: Colors.grey.shade500),
-                  filled: true,
-                  fillColor:
-                      dark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.grey.shade50,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide.none,
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: const BorderSide(color: Colors.red, width: 1.5),
-                  ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextButton(
-                      onPressed: () => Get.back(),
-                      style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      child: Text(
-                        'Keep it',
-                        style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                      ),
-                      onPressed: () async {
-                        if (reasonController.text.trim().isEmpty) {
-                          TLoaders.warningSnackBar(
-                            title: 'Reason Required',
-                            message: 'Please provide a reason for cancellation',
-                          );
-                          return;
-                        }
-                        Get.back();
-                        try {
-                          await controller.updateTelecallingStatus(
-                            telecallingId: schedule.id,
-                            status: InspectionStatuses.cancel,
-                            remarks: reasonController.text.trim(),
-                          );
-                          // Redirect back to main dashboard
-                          Get.offAll(() => const CoursesDashboard());
-                        } catch (e) {
-                          // Error handled in controller
-                        }
-                      },
-                      child: const Text(
-                        'Confirm Cancel',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
         ),
       ),
+      barrierDismissible: false,
     );
   }
 

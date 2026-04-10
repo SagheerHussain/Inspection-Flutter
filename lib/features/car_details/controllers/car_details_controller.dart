@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -31,6 +32,10 @@ class CarDetailsController extends GetxController {
       final response = await ApiService.get(
         ApiConstants.carDetailsUrl(appointmentId),
       );
+
+      // TEMPORARY DEBUG RESPONSE VIEW
+      debugPrint(const JsonEncoder.withIndent('  ').convert(response));
+
       final carData = response['carDetails'];
 
       if (carData != null) {

@@ -1198,7 +1198,7 @@ class CarModel {
       rearWithBootDoorOpenImages: parseStringList(
          json["rearWithBootDoorOpenImages"],
        ),
-      bootDoorImages: parseStringList(json["bootDoorImages"]),
+      bootDoorImages: parseStringList(json["bootdoorimages"] ?? json["bootDoorImages"]),
       rearBumperLhs45DegreeImages: parseStringList(
         json["rearBumperLhs45DegreeImages"],
       ),
@@ -1417,7 +1417,7 @@ class CarModel {
     "emailAddress": emailAddress,
     "appointmentId": appointmentId,
     "city": city,
-    "registrationType": registrationType,
+    // "registrationType": registrationType,
     "rcBookAvailability": rcBookAvailability,
     "rcCondition": rcCondition,
     "registrationNumber": registrationNumber,
@@ -1521,7 +1521,7 @@ class CarModel {
     "lhsRearAlloyImages": lhsRearAlloyImages,
     "lhsQuarterPanelImages": lhsQuarterPanelImages.map((x) => x).toList(),
     "rearMain": rearMain.map((x) => x).toList(),
-    "rearWithBootDoorOpen": rearWithBootDoorOpen,
+    "rearWithBootDoorOpen": rearWithBootDoorOpenImages.isNotEmpty ? rearWithBootDoorOpenImages.first : 'N/A',
     "rearBumperImages": rearBumperImages.map((x) => x).toList(),
     "lhsTailLampImages": lhsTailLampImages,
     "rhsTailLampImages": rhsTailLampImages,
@@ -1720,7 +1720,9 @@ class CarModel {
     "rearMainImages": rearMainImages.map((x) => x).toList(),
     "rearWithBootDoorOpenImages":
         rearWithBootDoorOpenImages.map((x) => x).toList(),
-    "bootDoorImages": bootDoorImages.map((x) => x).toList(),
+    "bootDoorOpenImages":
+        rearWithBootDoorOpenImages.map((x) => x).toList(),
+    // "bootdoorimages": bootDoorImages.map((x) => x).toList(),
     "rearBumperLhs45DegreeImages":
         rearBumperLhs45DegreeImages.map((x) => x).toList(),
     "rearBumperRhs45DegreeImages":
