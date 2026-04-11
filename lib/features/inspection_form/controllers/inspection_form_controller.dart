@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_compress/video_compress.dart';
 import '../../../data/services/api/api_service.dart';
@@ -1103,6 +1104,11 @@ class InspectionFormController extends GetxController {
 
           // Trigger Upload with Edited File
           _uploadMedia(key, editedPath, isVideo: false);
+
+          // Save to Gallery if captured from Camera
+          if (source == ImageSource.camera) {
+            _saveToGallery(editedPath);
+          }
         }
       }
     } catch (e) {
@@ -1114,6 +1120,19 @@ class InspectionFormController extends GetxController {
         colorText: Colors.white,
         margin: const EdgeInsets.all(12),
       );
+    }
+  }
+
+  Future<void> _saveToGallery(String path, {bool isVideo = false}) async {
+    try {
+      if (isVideo) {
+        await Gal.putVideo(path, album: 'Otobix Inspection');
+      } else {
+        await Gal.putImage(path, album: 'Otobix Inspection');
+      }
+      debugPrint('📸 Media saved to gallery: $path');
+    } catch (e) {
+      debugPrint('❌ Failed to save media to gallery: $e');
     }
   }
 
@@ -1152,6 +1171,11 @@ class InspectionFormController extends GetxController {
 
         // Trigger Upload (Compression starts inside _uploadMedia)
         _uploadMedia(key, picked.path, isVideo: true);
+
+        // Save to Gallery if captured from Camera
+        if (source == ImageSource.camera) {
+          _saveToGallery(picked.path, isVideo: true);
+        }
       }
     } catch (e) {
       Get.snackbar(
