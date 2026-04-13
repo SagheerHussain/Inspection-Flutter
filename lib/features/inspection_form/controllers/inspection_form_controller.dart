@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
@@ -90,6 +92,9 @@ class InspectionFormController extends GetxController {
   String get _snapshotLockedFieldsKey => 'snapshot_locked_$appointmentId';
   String get _snapshotOriginalDataKey => 'snapshot_original_$appointmentId';
   String get _snapshotCarIdKey => 'snapshot_carid_$appointmentId';
+  String get _snapshotCloudinaryKey => 'snapshot_cloudinary_$appointmentId';
+  String get _snapshotDeletionsKey => 'snapshot_deletions_$appointmentId';
+  String get _snapshotDropdownsKey => 'snapshot_dropdowns_$appointmentId';
 
   // Image storage: key → list of local file paths
   final RxMap<String, List<String>> imageFiles = <String, List<String>>{}.obs;
@@ -97,6 +102,16 @@ class InspectionFormController extends GetxController {
   // Cloudinary storage: localPath → {url, publicId}
   final RxMap<String, Map<String, String>> mediaCloudinaryData =
       <String, Map<String, String>>{}.obs;
+
+  // ─── Internal Media Tracking ───
+  // Tracks paths currently in flight to avoid redundant parallel uploads
+  final Set<String> _currentlyUploading = {};
+  // NEW: Offline Deletion Queue (PublicID + Metadata)
+  final RxList<Map<String, dynamic>> pendingDeletions =
+      <Map<String, dynamic>>[].obs;
+
+  // Subscription to monitor connectivity changes
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   // Dynamic Dropdown Options: key → list of string options
   final RxMap<String, List<String>> dropdownOptions =
@@ -137,178 +152,55 @@ class InspectionFormController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    fetchDropdownList();
-    fetchInspectionData();
+    // ── Sequential Initialization to prevent race conditions ──
+    _initializeFlow();
+
+    // Listen for internet restoration to automatically retry pending uploads
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      results,
+    ) {
+      final hasInternet = results.any(
+        (r) => r != ConnectivityResult.none,
+      );
+      if (hasInternet) {
+        retryFailedUploads();
+        retryPendingDeletions(); // NEW: Also retry any offline deletions
+      }
+    });
+  }
+
+  Future<void> _initializeFlow() async {
+    await fetchDropdownList();
+    await fetchInspectionData();
+  }
+
+  @override
+  void onClose() {
+    _connectivitySubscription?.cancel();
+    super.onClose();
   }
 
   Future<void> fetchInspectionData() async {
+    debugPrint('🚀 Starting fetchInspectionData for $appointmentId');
     isLoading.value = true;
     try {
-      // ── RE-INSPECTION FLOW ──
-      // API data ALWAYS takes priority for Re-Inspection leads.
-      // Draft/cached data is only used as a fallback if the API call fails.
-      if (isReInspection) {
-        // ── STEP 1: Always call the API first ──
-        try {
-          final response = await ApiService.get(
-            ApiConstants.carDetailsUrl(appointmentId),
-          );
-
-          final carData = response['carDetails'];
-          if (carData != null && carData is Map<String, dynamic>) {
-            _reInspectionCarId = carData['_id']?.toString();
-            _originalData = Map<String, dynamic>.from(carData);
-            _normalizeCarDataToFormKeys(carData);
-            inspectionData.value = InspectionFormModel.fromJson(carData);
-            _preFillMedia(carData);
-            await _saveSnapshot(); // cache for fallback on future failures
-
-            TLoaders.successSnackBar(
-              title: 'Re-Inspection Data Loaded',
-              message:
-                  'Previous inspection data pre-filled. Update fields as needed.',
-            );
-            _syncScheduleWithChanges();
-            isLoading.value = false;
-            return;
-          }
-        } catch (e) {
-          debugPrint('⚠️ Re-Inspection API fetch failed: $e — checking for cached data');
-        }
-
-        // ── STEP 2: API failed or returned null — fall back to cached snapshot ──
-        final snapshot = _storage.read(_snapshotKey);
-        if (snapshot != null && snapshot is Map) {
-          _reInspectionCarId =
-              snapshot['_id']?.toString() ?? _storage.read(_snapshotCarIdKey);
-          _originalData = Map<String, dynamic>.from(
-            _storage.read(_snapshotOriginalDataKey) ?? {},
-          );
-          inspectionData.value = InspectionFormModel.fromJson(
-            Map<String, dynamic>.from(snapshot),
-          );
-          final savedImages = _storage.read(_snapshotImagesKey);
-          if (savedImages != null && savedImages is Map) {
-            for (final entry in savedImages.entries) {
-              final list = entry.value;
-              if (list is List) {
-                imageFiles[entry.key.toString()] =
-                    list.map((e) => e.toString()).toList();
-              }
-            }
-          }
-          TLoaders.warningSnackBar(
-            title: 'Using Cached Data',
-            message: 'Could not reach server. Loaded from last saved state.',
-          );
-          final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
-          if (savedLockedFields != null && savedLockedFields is List) {
-            apiFetchedLockedFields.assignAll(savedLockedFields.cast<String>());
-          }
-          _syncScheduleWithChanges();
-          isLoading.value = false;
-          return;
-        }
-
-        // ── STEP 3: No API data and no cache — start fresh ──
-        _initializeNewInspection();
-        isLoading.value = false;
-        return;
-      }
-
-      // ── RUNNING LEADS: Check for Re-Inspection Origin FIRST ──
-      // Uses snapshot if available (API called only once).
-      final normalizedStatus =
-          schedule?.inspectionStatus.toLowerCase().replaceAll('-', '') ?? '';
-
-      if (normalizedStatus == 'running') {
-        // Check snapshot first
-        final snapshot = _storage.read(_snapshotKey);
-        if (snapshot != null && snapshot is Map) {
-          final cachedId = snapshot['_id']?.toString();
-          if (cachedId != null && cachedId.isNotEmpty) {
-            _reInspectionCarId = cachedId;
-            _originalData = Map<String, dynamic>.from(
-              _storage.read(_snapshotOriginalDataKey) ?? {},
-            );
-            inspectionData.value = InspectionFormModel.fromJson(
-              Map<String, dynamic>.from(snapshot),
-            );
-            final savedImages = _storage.read(_snapshotImagesKey);
-            if (savedImages != null && savedImages is Map) {
-              for (final entry in savedImages.entries) {
-                final list = entry.value;
-                if (list is List) {
-                  imageFiles[entry.key.toString()] =
-                      list.map((e) => e.toString()).toList();
-                }
-              }
-            }
-            TLoaders.successSnackBar(
-              title: 'Draft Loaded',
-              message: 'Continuing from your saved progress.',
-            );
-            final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
-            if (savedLockedFields != null && savedLockedFields is List) {
-              apiFetchedLockedFields.assignAll(
-                savedLockedFields.cast<String>(),
-              );
-            }
-            _syncScheduleWithChanges();
-            isLoading.value = false;
-            return;
-          }
-        }
-
-        /*
-        // ── API FETCH DISABLED AS PER USER REQUEST ──
-        // First open — call API to detect existing car record (Draft or Re-Inspection)
-        try {
-          final response = await ApiService.get(
-            ApiConstants.carDetailsUrl(appointmentId),
-          );
-          final carData = response['carDetails'];
-          if (carData != null && carData['_id'] != null) {
-            _reInspectionCarId = carData['_id']?.toString();
-            _originalData = Map<String, dynamic>.from(carData);
-            _normalizeCarDataToFormKeys(carData);
-            inspectionData.value = InspectionFormModel.fromJson(carData);
-            _preFillMedia(carData);
-            await _saveSnapshot(); // cache for all future opens
-
-            TLoaders.successSnackBar(
-              title:
-                  isReInspection ? 'Re-Inspection Data Loaded' : 'Data Loaded',
-              message:
-                  isReInspection
-                      ? 'Previous inspection data pre-filled. Update fields as needed.'
-                      : 'Existing inspection data loaded from server.',
-            );
-
-            _syncScheduleWithChanges();
-            isLoading.value = false;
-            return;
-          }
-        } catch (e) {
-          // Fall through to standard flow
-        }
-        */
-      }
-
-      // ── STANDARD FLOW (Scheduled / Running without Re-Inspection) ──
-      // Strategy: Call the API exactly ONCE per appointment.
-      //   • First open  → hit API, normalise, cache as local snapshot, display.
-      //   • Later opens → skip API, load directly from local snapshot.
-      // On "Save" the snapshot is fully overwritten with current form state,
-      // so all user edits survive across sessions without touching the API.
-
+      // ── STEP 1: ALWAYS CHECK FOR LOCAL DRAFT FIRST (ALL MODES) ──
       final snapshot = _storage.read(_snapshotKey);
-
+      
       if (snapshot != null && snapshot is Map) {
-        // ── SUBSEQUENT OPEN: load from snapshot (no API call) ──
+        debugPrint('📂 Found local draft for $appointmentId');
+        final cachedId = snapshot['_id']?.toString() ?? snapshot['id']?.toString();
+        if (cachedId != null && cachedId.isNotEmpty) {
+           _reInspectionCarId = cachedId;
+        }
+
         inspectionData.value = InspectionFormModel.fromJson(
           Map<String, dynamic>.from(snapshot),
         );
+
+        final restoredKeys = inspectionData.value?.data.keys.toList() ?? [];
+        debugPrint('✅ [Draft] Restore complete: ${restoredKeys.length} keys found.');
+        debugPrint('   📍 Restored Data snippet: ${inspectionData.value?.data.entries.take(10).map((e) => "${e.key}: ${e.value}")}');
 
         // Restore image paths saved in the snapshot
         final savedImages = _storage.read(_snapshotImagesKey);
@@ -322,18 +214,93 @@ class InspectionFormController extends GetxController {
           }
         }
 
+        // Restore Cloudinary Metadata
+        final savedCloudinaryData = _storage.read(_snapshotCloudinaryKey);
+        if (savedCloudinaryData != null && savedCloudinaryData is Map) {
+          _restoreCloudinaryData(savedCloudinaryData);
+        }
+
+        // Restore Pending Deletions
+        final savedDeletions = _storage.read(_snapshotDeletionsKey);
+        if (savedDeletions != null && savedDeletions is List) {
+          pendingDeletions.assignAll(savedDeletions.cast<Map<String, dynamic>>());
+        }
+
+        // Restore Dropdown Options
+        final savedDropdowns = _storage.read(_snapshotDropdownsKey);
+        if (savedDropdowns != null && savedDropdowns is Map) {
+          for (final entry in savedDropdowns.entries) {
+            final list = entry.value;
+            if (list is List) {
+              dropdownOptions[entry.key.toString()] = list.cast<String>();
+            }
+          }
+        }
+
+        inspectionData.refresh();
+
         TLoaders.successSnackBar(
           title: 'Draft Loaded',
           message: 'Continuing from your saved progress.',
         );
+
         final savedLockedFields = _storage.read(_snapshotLockedFieldsKey);
         if (savedLockedFields != null && savedLockedFields is List) {
           apiFetchedLockedFields.assignAll(savedLockedFields.cast<String>());
         }
-        _syncScheduleWithChanges();
+
+        // Wait a tiny bit for UI widgets to mount before syncing schedule
+        Future.delayed(const Duration(milliseconds: 300), () {
+          _syncScheduleWithChanges();
+        });
+
         isLoading.value = false;
         return;
       }
+
+      // ── STEP 2: NO DRAFT FOUND — PROCEED WITH DATA FETCHING ──
+
+      // ── RE-INSPECTION FLOW ──
+      // API data takes priority ONLY if no local draft exists.
+      if (isReInspection) {
+        try {
+          final response = await ApiService.get(
+            ApiConstants.carDetailsUrl(appointmentId),
+          );
+
+          final carData = response['carDetails'];
+          if (carData != null && carData is Map<String, dynamic>) {
+            _reInspectionCarId = carData['_id']?.toString();
+            _originalData = Map<String, dynamic>.from(carData);
+            _normalizeCarDataToFormKeys(carData);
+            inspectionData.value = InspectionFormModel.fromJson(carData);
+            _preFillMedia(carData);
+            await _saveSnapshot(); 
+
+            TLoaders.successSnackBar(
+              title: 'Re-Inspection Data Loaded',
+              message: 'Previous inspection data pre-filled. Update fields as needed.',
+            );
+            _syncScheduleWithChanges();
+            isLoading.value = false;
+            return;
+          }
+        } catch (e) {
+          debugPrint('⚠️ API fetch failed: $e');
+        }
+
+        // No API data and no cache — start fresh
+        _initializeNewInspection();
+        isLoading.value = false;
+        return;
+      }
+
+      // ── RUNNING LEADS & STANDARD FLOW ──
+      // Logic for leads without Re-Inspection status:
+      // Since we already checked for local drafts at Step 1, we only 
+      // initialize a new inspection here if no draft was found.
+      
+      _initializeNewInspection();
 
       /*
       // ── API FETCH DISABLED AS PER USER REQUEST ──
@@ -928,13 +895,8 @@ class InspectionFormController extends GetxController {
 
   void _initializeNewInspection() {
     inspectionData.value = InspectionFormModel(
-      id: '',
-      appointmentId: appointmentId,
-      make: '',
-      model: '',
-      variant: '',
-      status: 'Pending',
       data: {
+        '_id': '',
         'appointmentId': appointmentId,
         'registrationNumber': schedule?.carRegistrationNumber ?? '',
         'yearMonthOfManufacture': schedule?.yearOfManufacture ?? '',
@@ -945,6 +907,7 @@ class InspectionFormController extends GetxController {
         'make': '',
         'model': '',
         'variant': '',
+        'status': 'Pending',
         'ownerSerialNumber': schedule?.ownershipSerialNumber.toString() ?? '',
       },
     );
@@ -956,24 +919,8 @@ class InspectionFormController extends GetxController {
     final data = inspectionData.value;
     if (data == null) return;
 
-    final snapMap = <String, dynamic>{};
-    data.data.forEach((key, value) {
-      if (value is String || value is num || value is bool || value == null) {
-        snapMap[key] = value;
-      } else if (value is List) {
-        snapMap[key] = value.map((e) => e.toString()).toList();
-      } else {
-        snapMap[key] = value.toString();
-      }
-    });
-
-    // Always write identity fields from data.data (source of truth set by updateField)
-    snapMap['_id'] = data.data['_id'] ?? data.id;
-    snapMap['appointmentId'] = data.data['appointmentId'] ?? data.appointmentId;
-    snapMap['make'] = data.data['make'] ?? data.make;
-    snapMap['model'] = data.data['model'] ?? data.model;
-    snapMap['variant'] = data.data['variant'] ?? data.variant;
-    snapMap['status'] = data.data['status'] ?? data.status;
+    // Persist form fields (Standard form data)
+    final snapMap = data.toJson();
     await _storage.write(_snapshotKey, snapMap);
 
     // Persist image paths in snapshot
@@ -991,6 +938,46 @@ class InspectionFormController extends GetxController {
     await _storage.write(_snapshotOriginalDataKey, _originalData);
     if (_reInspectionCarId != null) {
       await _storage.write(_snapshotCarIdKey, _reInspectionCarId);
+    }
+
+    // Persist Cloudinary Metadata
+    final cloudinaryMap = <String, dynamic>{};
+    mediaCloudinaryData.forEach((k, v) => cloudinaryMap[k] = v);
+    await _storage.write(_snapshotCloudinaryKey, cloudinaryMap);
+
+    // Persist Deletion Queue
+    await _storage.write(_snapshotDeletionsKey, pendingDeletions.toList());
+
+    // Persist Dropdown Options (to ensure restored values are valid options)
+    final dropdownMap = <String, dynamic>{};
+    dropdownOptions.forEach((k, v) => dropdownMap[k] = v);
+    await _storage.write(_snapshotDropdownsKey, dropdownMap);
+    
+    debugPrint('💾 [Snapshot] Save Complete for $appointmentId. Fields: ${snapMap.length}, Images: ${imgMap.length}');
+  }
+
+  /// Clears all snapshot data related to THIS appointmentId.
+  /// Used after successful submission to ensure the next inspection starts fresh.
+  Future<void> _clearSnapshot() async {
+    await _storage.remove(_snapshotKey);
+    await _storage.remove(_snapshotImagesKey);
+    await _storage.remove(_snapshotCloudinaryKey);
+    await _storage.remove(_snapshotDeletionsKey);
+    await _storage.remove(_snapshotDropdownsKey);
+    await _storage.remove(_snapshotLockedFieldsKey);
+    await _storage.remove(_snapshotOriginalDataKey);
+    await _storage.remove(_snapshotCarIdKey);
+  }
+
+  /// Helper to restore mediaCloudinaryData from JSON-compatible Map
+  void _restoreCloudinaryData(Map data) {
+    for (final entry in data.entries) {
+      final val = entry.value;
+      if (val is Map) {
+        mediaCloudinaryData[entry.key.toString()] = Map<String, String>.from(
+          val.map((k, v) => MapEntry(k.toString(), v.toString())),
+        );
+      }
     }
   }
 
@@ -1028,6 +1015,9 @@ class InspectionFormController extends GetxController {
       }
 
       inspectionData.refresh();
+
+      // NEW: Auto-save draft on every change (Text, Dropdown, Selections)
+      _saveSnapshot();
     }
   }
 
@@ -1036,6 +1026,12 @@ class InspectionFormController extends GetxController {
   void _syncScheduleWithChanges() {
     final data = inspectionData.value;
     if (data == null) return;
+    
+    // Safety check: ensure we don't sync empty identity fields over valid schedule data
+    if (data.make.isEmpty && (schedule?.make.isNotEmpty ?? false)) {
+      debugPrint('⚠️ [Sync] Skipping schedule update: restored Make is empty while schedule has data.');
+      return;
+    }
 
     ScheduleController.updateScheduleGlobally(
       appointmentId,
@@ -1283,6 +1279,9 @@ class InspectionFormController extends GetxController {
 
       imageFiles[key] = List.from(currentList);
       imageFiles.refresh();
+
+      // NEW: Persist removal immediately
+      _saveSnapshot();
     }
   }
 
@@ -1292,6 +1291,14 @@ class InspectionFormController extends GetxController {
     String localPath, {
     required bool isVideo,
   }) async {
+    // Avoid re-uploading if already in progress or already successful
+    if (localPath.startsWith('http') ||
+        _currentlyUploading.contains(localPath) ||
+        isMediaUploaded(localPath)) {
+      return;
+    }
+
+    _currentlyUploading.add(localPath);
     try {
       // debugPrint(
       // '⬆️ [START] Uploading ${isVideo ? 'video' : 'image'} to Cloudinary...',
@@ -1367,6 +1374,8 @@ class InspectionFormController extends GetxController {
             'url': returnedUrl,
             'publicId': publicId,
           };
+          // NEW: Persist metadata success immediately so re-opens don't trigger re-upload
+          _saveSnapshot();
         } else {
           // debugPrint(
           // '⚠️ WARNING: No publicId found in response. Remote deletion will not work for this file.',
@@ -1379,7 +1388,29 @@ class InspectionFormController extends GetxController {
       }
     } catch (e) {
       // debugPrint('❌ FATAL: Upload failed for $localPath: $e');
+    } finally {
+      _currentlyUploading.remove(localPath);
+      // Refresh UI if needed (thumbnails might be watching isMediaUploaded)
+      mediaCloudinaryData.refresh();
     }
+  }
+
+  /// Iterates through all image fields and triggers upload for any local files
+  /// that don't have a successful server URL yet.
+  void retryFailedUploads() {
+    // Avoid triggering retries while the form is still loading its initial snapshot/API data
+    if (isLoading.value) return;
+
+    // debugPrint('📡 Connectivity change detected: Triggering retry for failed uploads...');
+    imageFiles.forEach((key, paths) {
+      final field = _findFieldByKey(key);
+      final isVideo = field?.type == FType.video;
+
+      for (final path in paths) {
+        // _uploadMedia performs its own guard checks
+        _uploadMedia(key, path, isVideo: isVideo);
+      }
+    });
   }
 
   Future<String?> _compressVideo(String videoPath) async {
@@ -1401,6 +1432,7 @@ class InspectionFormController extends GetxController {
     String publicId, {
     required bool isVideo,
     required String localInfo,
+    bool addToQueueOnFailure = true,
   }) async {
     try {
       // debugPrint(
@@ -1416,6 +1448,39 @@ class InspectionFormController extends GetxController {
       // debugPrint('✅ SUCCESS: Remote file deleted.');
     } catch (e) {
       // debugPrint('❌ ERROR: Delete failed for $localInfo: $e');
+
+      if (addToQueueOnFailure) {
+        // Avoid duplicate entries in the queue
+        bool alreadyQueued = pendingDeletions.any((d) => d['publicId'] == publicId);
+        if (!alreadyQueued) {
+          pendingDeletions.add({
+            'publicId': publicId,
+            'isVideo': isVideo,
+            'localInfo': localInfo,
+          });
+          _saveSnapshot(); // Persist the queue state
+        }
+      }
+    }
+  }
+
+  /// Retries all deletion requests that were previously queued due to lack of internet.
+  void retryPendingDeletions() async {
+    if (pendingDeletions.isEmpty) return;
+
+    // debugPrint('📡 Connectivity restored. Retrying ${pendingDeletions.length} deletions...');
+
+    // Take a snapshot of the current queue and clear it to avoid infinite loops if it fails again
+    final List<Map<String, dynamic>> toRetry = List.from(pendingDeletions);
+    pendingDeletions.clear();
+
+    for (final item in toRetry) {
+      await _deleteMedia(
+        item['publicId'].toString(),
+        isVideo: item['isVideo'] == true,
+        localInfo: item['localInfo'].toString(),
+        addToQueueOnFailure: true, // Re-queue if it fails AGAIN
+      );
     }
   }
 
@@ -1563,6 +1628,15 @@ class InspectionFormController extends GetxController {
     return imageFiles[key] ?? [];
   }
 
+  /// Checks if a media file (image/video) has been successfully uploaded to the server.
+  bool isMediaUploaded(String path) {
+    if (path.startsWith('http')) return true;
+    final data = mediaCloudinaryData[path];
+    if (data == null) return false;
+    final url = data['url'];
+    return url != null && url.startsWith('http');
+  }
+
   // ─── Navigation ───
   /// Returns a list of labels for required fields that are not yet filled in the current section.
   List<String> getUnfilledRequiredFields(int sectionIndex) {
@@ -1578,9 +1652,22 @@ class InspectionFormController extends GetxController {
 
       // Special check for image/video fields
       if (field.type == FType.image || field.type == FType.video) {
-        final count = imageFiles[field.key]?.length ?? 0;
+        final paths = imageFiles[field.key] ?? [];
+        final count = paths.length;
         if (count < field.minImages) {
           unFilled.add(field.label);
+        } else {
+          // NEW: Validate that all attached images are actually uploaded to server
+          bool allUploaded = true;
+          for (final path in paths) {
+            if (!isMediaUploaded(path)) {
+              allUploaded = false;
+              break;
+            }
+          }
+          if (!allUploaded) {
+            unFilled.add("${field.label} (Uploading...)");
+          }
         }
       } else {
         // Standard field check
@@ -1750,15 +1837,31 @@ class InspectionFormController extends GetxController {
 
         // 2. Perform Validation
         if (field.type == FType.image || field.type == FType.video) {
-          final imgs = getImages(field.key);
+          final paths = getImages(field.key);
           final minReq = field.minImages > 0 ? field.minImages : 1;
-          if (imgs.length < minReq) {
+
+          if (paths.length < minReq) {
             String label = field.label;
             if (minReq > 1) label += ' (At least $minReq photos)';
             missingBySection.putIfAbsent(section.title, () => []).add({
               'key': field.key,
               'label': label,
             });
+          } else {
+            // NEW: Ensure all captured images for required fields are successfully uploaded
+            bool allUploaded = true;
+            for (final path in paths) {
+              if (!isMediaUploaded(path)) {
+                allUploaded = false;
+                break;
+              }
+            }
+            if (!allUploaded) {
+              missingBySection.putIfAbsent(section.title, () => []).add({
+                'key': field.key,
+                'label': '${field.label} (Still uploading...)',
+              });
+            }
           }
         } else {
           final val = getFieldValue(field.key);
@@ -2102,8 +2205,7 @@ class InspectionFormController extends GetxController {
       // debugPrint('✅ API Response: $response');
 
       // 5. Clear local draft on success
-      await _storage.remove('draft_$appointmentId');
-      await _storage.remove('draft_images_$appointmentId');
+      await _clearSnapshot();
 
       // 6. Update telecalling status to 'Inspected'
       try {
@@ -2838,8 +2940,7 @@ class InspectionFormController extends GetxController {
       // debugPrint('✅ API Response: $response');
 
       // 5. Clear local draft on success
-      await _storage.remove('draft_$appointmentId');
-      await _storage.remove('draft_images_$appointmentId');
+      await _clearSnapshot();
 
       // 6. Update telecalling status to 'Inspected'
       try {

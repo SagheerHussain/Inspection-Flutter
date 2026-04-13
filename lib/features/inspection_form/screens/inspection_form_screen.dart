@@ -1723,12 +1723,14 @@ class _BoundImagePicker extends StatelessWidget {
                         if (isVideoField) {
                           return _VideoThumbnail(
                             path: media[index],
+                            controller: controller, // Pass controller
                             onRemove:
                                 () => controller.removeImage(field.key, index),
                           );
                         }
                         return _ImageThumbnail(
                           path: media[index],
+                          controller: controller, // Pass controller
                           onRemove:
                               () => controller.removeImage(field.key, index),
                         );
@@ -1925,7 +1927,12 @@ class _PickerOption extends StatelessWidget {
 class _ImageThumbnail extends StatelessWidget {
   final String path;
   final VoidCallback onRemove;
-  const _ImageThumbnail({required this.path, required this.onRemove});
+  final InspectionFormController controller;
+  const _ImageThumbnail({
+    required this.path,
+    required this.onRemove,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2129,6 +2136,40 @@ class _ImageThumbnail extends StatelessWidget {
                   ),
                 ),
               ),
+
+              // NEW: Uploading Status Overlay
+              Obx(() {
+                final isUploaded = controller.isMediaUploaded(path);
+                if (isUploaded) return const SizedBox.shrink();
+
+                return Positioned.fill(
+                  child: Container(
+                    color: Colors.black.withValues(alpha: 0.4),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(Colors.white),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Uploading...',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }),
             ],
           ),
         ),
@@ -2261,7 +2302,12 @@ class _ImageUploadButton extends StatelessWidget {
 class _VideoThumbnail extends StatelessWidget {
   final String path;
   final VoidCallback onRemove;
-  const _VideoThumbnail({required this.path, required this.onRemove});
+  final InspectionFormController controller;
+  const _VideoThumbnail({
+    required this.path,
+    required this.onRemove,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2316,6 +2362,40 @@ class _VideoThumbnail extends StatelessWidget {
                 ),
               ),
             ),
+
+            // NEW: Uploading Status Overlay
+            Obx(() {
+              final isUploaded = controller.isMediaUploaded(path);
+              if (isUploaded) return const SizedBox.shrink();
+
+              return Positioned.fill(
+                child: Container(
+                  color: Colors.black.withValues(alpha: 0.4),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Uploading...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }),
           ],
         ),
       ),
