@@ -1411,10 +1411,7 @@ class InspectionFormController extends GetxController {
       final url =
           isVideo ? ApiConstants.deleteVideoUrl : ApiConstants.deleteImageUrl;
 
-      final response = await ApiService.delete(url, {'publicId': publicId});
-
-      // Print full API response
-      // debugPrint(' API RESPONSE (Delete $localInfo): $response');
+      await ApiService.delete(url, {'publicId': publicId});
 
       // debugPrint('✅ SUCCESS: Remote file deleted.');
     } catch (e) {
@@ -2031,6 +2028,7 @@ class InspectionFormController extends GetxController {
       // Ensure status is set to Inspected in the Car collection
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
+      payload['auctionStatus'] = 'inspected';
 
       // Ensure timestamp and inspectionDate represent IST but in UTC format
       final nowIstUtc = _dateToIstUtcIso(DateTime.now());
@@ -2823,6 +2821,7 @@ class InspectionFormController extends GetxController {
       // Set status to Inspected on successful Re-Inspection submit
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
+      payload['auctionStatus'] = 'inspected';
 
       // Keep the _id for the update API
       // Remove objectId only

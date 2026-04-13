@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../models/car_model.dart';
 import '../models/inspection_form_model.dart';
 
@@ -42,7 +41,7 @@ DateTime? _dt(InspectionFormModel d, String key) {
   final v = d.data[key];
   if (v == null) return null;
   if (v is DateTime) return v;
-  
+
   String? vs;
   if (v is String) {
     vs = v;
@@ -77,11 +76,11 @@ DateTime? _dt(InspectionFormModel d, String key) {
       if (m != null && y != null) return DateTime(y, m);
     }
   }
-  
+
   if (v is num && v > 1000000000000) {
     return DateTime.fromMillisecondsSinceEpoch(v.toInt());
   }
-  
+
   return null;
 }
 
@@ -115,13 +114,12 @@ CarModel buildCarModelFromForm(
   List<String> asList(String k) {
     final raw = data.data[k];
     if (raw is List) return raw.map((e) => e.toString()).toList();
-    
+
     final v = s(k);
     if (v.isEmpty) return [];
     if (v.contains(',')) return v.split(',').map((e) => e.trim()).toList();
     return [v];
   }
-
 
   // ── Pre-compute merged fields ──
   // musicSystem + stereo → infotainmentSystemDropdownList
@@ -446,18 +444,19 @@ CarModel buildCarModelFromForm(
     commentsOnElectricals: s('commentsOnElectricals'),
     // renamed
     meterConsoleWithEngineOn: img('meterConsoleWithEngineOnImages'),
-    airbags: [
-      img('airbagImages').firstOrNull,
-      img('coDriverAirbagImages').firstOrNull,
-      img('driverSeatAirbagImages').firstOrNull,
-      img('coDriverSeatAirbagImages').firstOrNull,
-      img('rhsCurtainAirbagImages').firstOrNull,
-      img('lhsCurtainAirbagImages').firstOrNull,
-      img('driverKneeAirbagImages').firstOrNull,
-      img('coDriverKneeAirbagImages').firstOrNull,
-      img('rhsRearSideAirbagImages').firstOrNull,
-      img('lhsRearSideAirbagImages').firstOrNull,
-    ].whereType<String>().toList(),
+    airbags:
+        [
+          img('airbagImages').firstOrNull,
+          img('coDriverAirbagImages').firstOrNull,
+          img('driverSeatAirbagImages').firstOrNull,
+          img('coDriverSeatAirbagImages').firstOrNull,
+          img('rhsCurtainAirbagImages').firstOrNull,
+          img('lhsCurtainAirbagImages').firstOrNull,
+          img('driverKneeAirbagImages').firstOrNull,
+          img('coDriverKneeAirbagImages').firstOrNull,
+          img('rhsRearSideAirbagImages').firstOrNull,
+          img('lhsRearSideAirbagImages').firstOrNull,
+        ].whereType<String>().toList(),
     sunroofImages: img('sunroofImages'),
     frontSeatsFromDriverSideDoorOpen: img('frontSeatsFromDriverSideImages'),
     rearSeatsFromRightSideDoorOpen: img('rearSeatsFromRightSideImages'),
@@ -485,7 +484,10 @@ CarModel buildCarModelFromForm(
     v: i('__v'),
 
     // ✅ New fields (all nullable) — below the comment line
-    ieName: userName.isNotEmpty ? userName : s('emailAddress'), // logged-in user's username
+    ieName:
+        userName.isNotEmpty
+            ? userName
+            : s('emailAddress'), // logged-in user's username
     inspectionCity: s('city'), // renamed from city
     rcBookAvailabilityDropdownList: asList('rcBookAvailability'),
     fitnessValidity: dt('fitnessValidity'),
