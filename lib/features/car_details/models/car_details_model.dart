@@ -232,7 +232,7 @@ class CarDetailsModel {
   final List<String> engineSound;
   final List<String> exhaustSmokeImages;
   final List<String> meterConsoleWithEngineOn;
-  final List<String> airbags;
+  final List<String> airbagimages;
   final List<String> sunroofImages;
   final List<String> frontSeatsFromDriverSideDoorOpen;
   final List<String> rearSeatsFromRightSideDoorOpen;
@@ -462,7 +462,7 @@ class CarDetailsModel {
     required this.engineSound,
     required this.exhaustSmokeImages,
     required this.meterConsoleWithEngineOn,
-    required this.airbags,
+    required this.airbagimages,
     required this.sunroofImages,
     required this.frontSeatsFromDriverSideDoorOpen,
     required this.rearSeatsFromRightSideDoorOpen,
@@ -701,7 +701,9 @@ class CarDetailsModel {
       meterConsoleWithEngineOn: _safeStringList(
         json['meterConsoleWithEngineOn'],
       ),
-      airbags: _safeStringList(json['airbags']),
+      airbagimages: _safeStringList(
+        json['airbagImages'] ?? json['airbagimages'] ?? json['airbags'],
+      ),
       sunroofImages: _safeStringList(json['sunroofImages']),
       frontSeatsFromDriverSideDoorOpen: _safeStringList(
         json['frontSeatsFromDriverSideDoorOpen'],
@@ -817,8 +819,11 @@ class CarDetailsModel {
 
     // Priority 4: Airbag mapping
     final airbagMapping = {
-      'airbagImages': 0, 'airbagImages0': 0,
-      'coDriverAirbagImages': 1, 'airbagImages1': 1,
+      'driverAirbagImages': 0,
+      'airbagImages': 0,
+      'airbagImages0': 0,
+      'coDriverAirbagImages': 1,
+      'airbagImages1': 1,
       'driverSeatAirbagImages': 2, 'airbagImages2': 2,
       'coDriverSeatAirbagImages': 3, 'airbagImages3': 3,
       'rhsCurtainAirbagImages': 4, 'airbagImages4': 4,
@@ -831,7 +836,7 @@ class CarDetailsModel {
 
     if (airbagMapping.containsKey(key)) {
       final index = airbagMapping[key]!;
-      if (index < airbags.length) return [airbags[index]];
+      if (index < airbagimages.length) return [airbagimages[index]];
     }
 
     return [];
@@ -905,7 +910,7 @@ class CarDetailsModel {
   /// All interior images
   List<String> get allInteriorImages => [
     ...meterConsoleWithEngineOn,
-    ...airbags,
+    ...airbagimages,
     ...sunroofImages,
     ...frontSeatsFromDriverSideDoorOpen,
     ...rearSeatsFromRightSideDoorOpen,

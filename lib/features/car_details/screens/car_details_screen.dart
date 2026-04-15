@@ -9,6 +9,9 @@ import '../../../utils/helpers/helper_functions.dart';
 import '../controllers/car_details_controller.dart';
 import '../models/car_details_model.dart';
 import '../../inspection_form/models/inspection_field_defs.dart';
+import '../../inspection_form/screens/inspection_form_screen.dart';
+import '../../schedules/models/schedule_model.dart';
+import '../../../personalization/controllers/user_controller.dart';
 import 'package:video_player/video_player.dart';
 
 // Royal blue theme
@@ -109,6 +112,61 @@ class _CarDetailsBody extends StatelessWidget {
           child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
         ),
       ),
+      actions: [
+        if (UserController.instance.user.value.id == 'superadmin')
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: IconButton(
+              onPressed: () {
+                final schedule = ScheduleModel(
+                  id: car.id,
+                  carRegistrationNumber: car.registrationNumber,
+                  yearOfRegistration: car.registrationDate,
+                  ownerName: car.registeredOwner,
+                  ownershipSerialNumber: car.ownerSerialNumber,
+                  make: car.make,
+                  model: car.model,
+                  variant: car.variant,
+                  emailAddress: car.emailAddress,
+                  appointmentSource: 'Re-Inspection', // Use re-inspection logic to load data
+                  vehicleStatus: car.status,
+                  zipCode: '',
+                  customerContactNumber: car.contactNumber,
+                  city: car.city,
+                  yearOfManufacture: car.yearMonthOfManufacture,
+                  allocatedTo: '',
+                  inspectionStatus: 'Re-Inspected',
+                  approvalStatus: car.approvalStatus,
+                  priority: 'Medium',
+                  ncdUcdName: '',
+                  repName: '',
+                  repContact: '',
+                  bankSource: '',
+                  referenceName: '',
+                  remarks: '',
+                  createdBy: '',
+                  odometerReadingInKms: car.odometerReadingInKms,
+                  additionalNotes: '',
+                  carImages: [],
+                  inspectionDateTime: DateTime.now(),
+                  inspectionAddress: '',
+                  inspectionEngineerNumber: '',
+                  addedBy: '',
+                  timeStamp: DateTime.now(),
+                  appointmentId: car.appointmentId,
+                  createdAt: DateTime.now(),
+                  updatedAt: DateTime.now(),
+                );
+                Get.to(() => InspectionFormScreen(appointmentId: car.appointmentId, schedule: schedule));
+              },
+              icon: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.3), shape: BoxShape.circle),
+                child: const Icon(Icons.edit_rounded, color: Colors.white, size: 20),
+              ),
+            ),
+          ),
+      ],
       flexibleSpace: FlexibleSpaceBar(
         background: Stack(
           fit: StackFit.expand,
@@ -323,7 +381,52 @@ class _SectionContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final List<Widget> children = [];
-    final fields = section.fields;
+    List<F> fields = section.fields;
+
+    // 🏆 Custom Sequence for Interior section
+    if (section.title == 'Interior') {
+      final interiorSequence = [
+        'noOfAirBags',
+        'airbagFeaturesDriverSide',
+        'driverAirbagImages',
+        'airbagFeaturesCoDriverSide',
+        'coDriverAirbagImages',
+        'driverSeatAirbag',
+        'driverSeatAirbagImages',
+        'coDriverSeatAirbag',
+        'coDriverSeatAirbagImages',
+        'rhsCurtainAirbag',
+        'rhsCurtainAirbagImages',
+        'lhsCurtainAirbag',
+        'lhsCurtainAirbagImages',
+        'driverSideKneeAirbag',
+        'driverKneeAirbagImages',
+        'coDriverKneeSeatAirbag',
+        'coDriverKneeAirbagImages',
+        'rhsRearSideAirbag',
+        'rhsRearSideAirbagImages',
+        'lhsRearSideAirbag',
+        'lhsRearSideAirbagImages',
+        'seatsUpholstery',
+        'driverSeat',
+        'coDriverSeat',
+        'frontCentreArmRest',
+        'rearSeats',
+        'thirdRowSeats',
+        'frontSeatsFromDriverSideImages',
+        'rearSeatsFromRightSideImages',
+        'dashboardImages',
+        'commentOnInterior',
+      ];
+
+      // Reorder fields based on sequence, only including those present in section.fields
+      final Map<String, F> fieldMap = {for (var f in section.fields) f.key: f};
+      fields = interiorSequence
+          .where((key) => fieldMap.containsKey(key))
+          .map((key) => fieldMap[key]!)
+          .toList();
+    }
+
     final Set<String> processedKeys = {};
 
     for (int i = 0; i < fields.length; i++) {
@@ -334,32 +437,39 @@ class _SectionContent extends StatelessWidget {
       final List<String> currentGroup = [field.key];
       processedKeys.add(field.key);
 
-      // Look ahead for related fields (images/videos/comments) that should be in the same card
-      for (int j = i + 1; j < fields.length; j++) {
-        final nextField = fields[j];
-        if (processedKeys.contains(nextField.key)) continue;
+      // Disable grouping for Interior section to keep the sequence flat as requested
+      if (section.title != 'Interior') {
+        // Look ahead for related fields (images/videos/comments) that should be in the same card
+        for (int j = i + 1; j < fields.length; j++) {
+          final nextField = fields[j];
+          if (processedKeys.contains(nextField.key)) continue;
 
-        // Relation Check: If next field is an image/video/additional field for the current one
-        final bool isRelated = nextField.key.toLowerCase().contains(field.key.toLowerCase()) && 
-                              (nextField.type == FType.image || nextField.type == FType.video || nextField.key.toLowerCase().contains('comment'));
-        
-        // OR: If the current field is an image and the next one is ALSO an image for the same "part"
-        // (common in documents where multiple images might exist for one label)
-        final bool isPartImage = (field.type == FType.image || field.type == FType.video) && 
-                                 (nextField.type == FType.image || nextField.type == FType.video) &&
-                                 nextField.label.toLowerCase().contains(field.label.toLowerCase());
+          // Relation Check: If next field is an image/video/additional field for the current one
+          final bool isRelated =
+              nextField.key.toLowerCase().contains(field.key.toLowerCase()) &&
+              (nextField.type == FType.image ||
+                  nextField.type == FType.video ||
+                  nextField.key.toLowerCase().contains('comment'));
 
-        if (isRelated || isPartImage) {
-          currentGroup.add(nextField.key);
-          processedKeys.add(nextField.key);
-        } else {
-          break; // Stop grouping once a non-related field is encountered
+          // OR: If the current field is an image and the next one is ALSO an image for the same "part"
+          final bool isPartImage =
+              (field.type == FType.image || field.type == FType.video) &&
+              (nextField.type == FType.image || nextField.type == FType.video) &&
+              nextField.label.toLowerCase().contains(field.label.toLowerCase());
+
+          if (isRelated || isPartImage) {
+            currentGroup.add(nextField.key);
+            processedKeys.add(nextField.key);
+          } else {
+            break; // Stop grouping once a non-related field is encountered
+          }
         }
       }
 
       // Special case: "Full View" for the first image of a main body section
       String groupTitle = field.label;
-      if (i == 0 && (field.type == FType.image || field.type == FType.video) && 
+      if (i == 0 &&
+          (field.type == FType.image || field.type == FType.video) &&
           ['Front', 'Rear', 'Left', 'Right'].contains(section.title)) {
         groupTitle = 'Full View';
       }
@@ -391,11 +501,23 @@ class _SectionContent extends StatelessWidget {
       final field = findField(key);
       if (field == null) continue;
       
-      // Airbag images filtering (from original code)
-      final airbagKeys = ['airbagImages', 'coDriverAirbagImages', 'driverSeatAirbagImages', 'coDriverSeatAirbagImages', 'rhsCurtainAirbagImages', 'lhsCurtainAirbagImages', 'driverKneeAirbagImages', 'coDriverKneeAirbagImages', 'rhsRearSideAirbagImages', 'lhsRearSideAirbagImages'];
+      // 🛟 Airbag reserved index mapping
+      final airbagKeys = [
+        'driverAirbagImages',
+        'coDriverAirbagImages',
+        'driverSeatAirbagImages',
+        'coDriverSeatAirbagImages',
+        'rhsCurtainAirbagImages',
+        'lhsCurtainAirbagImages',
+        'driverKneeAirbagImages',
+        'coDriverKneeAirbagImages',
+        'rhsRearSideAirbagImages',
+        'lhsRearSideAirbagImages'
+      ];
       if (airbagKeys.contains(field.key)) {
         final index = airbagKeys.indexOf(field.key);
-        if (index >= car.airbags.length) continue;
+        // Only show if the slot in the 10-index array exists and has a valid URL
+        if (index >= car.airbagimages.length || car.airbagimages[index].isEmpty) continue;
       }
 
       rows.add(_GroupedDetailRow(field: field, car: car, dark: dark));

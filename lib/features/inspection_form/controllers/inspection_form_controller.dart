@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
 import 'package:video_compress/video_compress.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import '../../../data/services/api/api_service.dart';
 import '../../../utils/constants/api_constants.dart';
 import '../../../utils/popups/exports.dart';
@@ -61,6 +62,7 @@ class InspectionFormController extends GetxController {
 
   /// The carId (_id) from the car details API response for Re-Inspection update
   String? _reInspectionCarId;
+  String _appVersion = 'Unknown';
 
   // Helper to find field definition by key
   F? _findFieldByKey(String key) {
@@ -135,7 +137,7 @@ class InspectionFormController extends GetxController {
     'commentsOnOthers',
     'commentsOnClusterMeter',
     'commentsOnAC',
-    'airbagImages',
+    'driverAirbagImages',
     'coDriverAirbagImages',
     'driverSeatAirbagImages',
     'coDriverSeatAirbagImages',
@@ -159,9 +161,7 @@ class InspectionFormController extends GetxController {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
       results,
     ) {
-      final hasInternet = results.any(
-        (r) => r != ConnectivityResult.none,
-      );
+      final hasInternet = results.any((r) => r != ConnectivityResult.none);
       if (hasInternet) {
         retryFailedUploads();
         retryPendingDeletions(); // NEW: Also retry any offline deletions
@@ -170,8 +170,18 @@ class InspectionFormController extends GetxController {
   }
 
   Future<void> _initializeFlow() async {
+    await _fetchVersion();
     await fetchDropdownList();
     await fetchInspectionData();
+  }
+
+  Future<void> _fetchVersion() async {
+    try {
+      final packageInfo = await PackageInfo.fromPlatform();
+      _appVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+    } catch (e) {
+      debugPrint('⚠️ Failed to fetch app version: $e');
+    }
   }
 
   @override
@@ -186,12 +196,13 @@ class InspectionFormController extends GetxController {
     try {
       // ── STEP 1: ALWAYS CHECK FOR LOCAL DRAFT FIRST (ALL MODES) ──
       final snapshot = _storage.read(_snapshotKey);
-      
+
       if (snapshot != null && snapshot is Map) {
         debugPrint('📂 Found local draft for $appointmentId');
-        final cachedId = snapshot['_id']?.toString() ?? snapshot['id']?.toString();
+        final cachedId =
+            snapshot['_id']?.toString() ?? snapshot['id']?.toString();
         if (cachedId != null && cachedId.isNotEmpty) {
-           _reInspectionCarId = cachedId;
+          _reInspectionCarId = cachedId;
         }
 
         inspectionData.value = InspectionFormModel.fromJson(
@@ -199,8 +210,12 @@ class InspectionFormController extends GetxController {
         );
 
         final restoredKeys = inspectionData.value?.data.keys.toList() ?? [];
-        debugPrint('✅ [Draft] Restore complete: ${restoredKeys.length} keys found.');
-        debugPrint('   📍 Restored Data snippet: ${inspectionData.value?.data.entries.take(10).map((e) => "${e.key}: ${e.value}")}');
+        debugPrint(
+          '✅ [Draft] Restore complete: ${restoredKeys.length} keys found.',
+        );
+        debugPrint(
+          '   📍 Restored Data snippet: ${inspectionData.value?.data.entries.take(10).map((e) => "${e.key}: ${e.value}")}',
+        );
 
         // Restore image paths saved in the snapshot
         final savedImages = _storage.read(_snapshotImagesKey);
@@ -223,7 +238,9 @@ class InspectionFormController extends GetxController {
         // Restore Pending Deletions
         final savedDeletions = _storage.read(_snapshotDeletionsKey);
         if (savedDeletions != null && savedDeletions is List) {
-          pendingDeletions.assignAll(savedDeletions.cast<Map<String, dynamic>>());
+          pendingDeletions.assignAll(
+            savedDeletions.cast<Map<String, dynamic>>(),
+          );
         }
 
         // Restore Dropdown Options
@@ -260,9 +277,10 @@ class InspectionFormController extends GetxController {
 
       // ── STEP 2: NO DRAFT FOUND — PROCEED WITH DATA FETCHING ──
 
-      // ── RE-INSPECTION FLOW ──
+      // ── RE-INSPECTION & SUPERADMIN EDIT FLOW ──
       // API data takes priority ONLY if no local draft exists.
-      if (isReInspection) {
+      final user = UserController.instance.user.value;
+      if (isReInspection || user.id == 'superadmin') {
         try {
           final response = await ApiService.get(
             ApiConstants.carDetailsUrl(appointmentId),
@@ -275,11 +293,12 @@ class InspectionFormController extends GetxController {
             _normalizeCarDataToFormKeys(carData);
             inspectionData.value = InspectionFormModel.fromJson(carData);
             _preFillMedia(carData);
-            await _saveSnapshot(); 
+            await _saveSnapshot();
 
             TLoaders.successSnackBar(
               title: 'Re-Inspection Data Loaded',
-              message: 'Previous inspection data pre-filled. Update fields as needed.',
+              message:
+                  'Previous inspection data pre-filled. Update fields as needed.',
             );
             _syncScheduleWithChanges();
             isLoading.value = false;
@@ -297,9 +316,9 @@ class InspectionFormController extends GetxController {
 
       // ── RUNNING LEADS & STANDARD FLOW ──
       // Logic for leads without Re-Inspection status:
-      // Since we already checked for local drafts at Step 1, we only 
+      // Since we already checked for local drafts at Step 1, we only
       // initialize a new inspection here if no draft was found.
-      
+
       _initializeNewInspection();
 
       /*
@@ -485,7 +504,8 @@ class InspectionFormController extends GetxController {
       // For List values from DropdownList fields, join into comma-separated string
       if (apiVal is List && apiVal.isNotEmpty) {
         carData[formKey] = apiVal.join(', ');
-      } else if (carData[formKey] == null || carData[formKey].toString().isEmpty) {
+      } else if (carData[formKey] == null ||
+          carData[formKey].toString().isEmpty) {
         carData[formKey] = apiVal;
       }
     }
@@ -502,7 +522,8 @@ class InspectionFormController extends GetxController {
 
     // ── Merged/Split field handling ──
     // seatsUpholstery ← leatherSeats/fabricSeats
-    if (carData['seatsUpholstery'] == null || carData['seatsUpholstery'].toString().isEmpty) {
+    if (carData['seatsUpholstery'] == null ||
+        carData['seatsUpholstery'].toString().isEmpty) {
       if (carData['leatherSeats']?.toString().toLowerCase() == 'yes') {
         carData['seatsUpholstery'] = 'Leather';
       } else if (carData['fabricSeats']?.toString().toLowerCase() == 'yes') {
@@ -511,17 +532,20 @@ class InspectionFormController extends GetxController {
     }
 
     // steeringMountedMediaControls / steeringMountedSystemControls ← steeringMountedAudioControl
-    if (carData['steeringMountedMediaControls'] == null || 
+    if (carData['steeringMountedMediaControls'] == null ||
         carData['steeringMountedMediaControls'].toString().isEmpty) {
-      carData['steeringMountedMediaControls'] = carData['steeringMountedAudioControl'] ?? '';
+      carData['steeringMountedMediaControls'] =
+          carData['steeringMountedAudioControl'] ?? '';
     }
-    if (carData['steeringMountedSystemControls'] == null || 
+    if (carData['steeringMountedSystemControls'] == null ||
         carData['steeringMountedSystemControls'].toString().isEmpty) {
-      carData['steeringMountedSystemControls'] = carData['steeringMountedAudioControl'] ?? '';
+      carData['steeringMountedSystemControls'] =
+          carData['steeringMountedAudioControl'] ?? '';
     }
 
     // musicSystem → infotainmentSystem
-    if (carData['infotainmentSystem'] == null || carData['infotainmentSystem'].toString().isEmpty) {
+    if (carData['infotainmentSystem'] == null ||
+        carData['infotainmentSystem'].toString().isEmpty) {
       carData['infotainmentSystem'] = carData['musicSystem'] ?? '';
     }
 
@@ -560,22 +584,56 @@ class InspectionFormController extends GetxController {
 
     // ── Direct image keys (same key in API and form) ──
     final List<String> directImageKeys = [
-      'frontWindshieldImages', 'roofImages', 'lhsHeadlampImages',
-      'lhsFoglampImages', 'rhsHeadlampImages', 'rhsFoglampImages',
-      'lhsFenderImages', 'lhsFrontTyreImages', 'lhsRunningBorderImages',
-      'lhsOrvmImages', 'lhsAPillarImages', 'lhsFrontDoorImages',
-      'lhsBPillarImages', 'lhsRearDoorImages', 'lhsCPillarImages',
-      'lhsRearTyreImages', 'spareTyreImages', 'bootFloorImages',
-      'rhsCPillarImages', 'rhsRearDoorImages', 'rhsBPillarImages',
-      'rhsFrontDoorImages', 'rhsAPillarImages', 'rhsRunningBorderImages',
-      'rhsFrontTyreImages', 'rhsRearTyreImages', 'rhsOrvmImages', 'rhsFenderImages',
-      'batteryImages', 'sunroofImages', 'lhsTailLampImages', 'rhsTailLampImages',
-      'rearWindshieldImages', 'chassisEmbossmentImages', 'vinPlateImages',
-      'roadTaxImages', 'pucImages', 'rtoNocImages', 'rtoForm28Images',
-      'frontWiperAndWasherImages', 'lhsRearFogLampImages', 'rhsRearFogLampImages',
-      'rearWiperAndWasherImages', 'spareWheelImages', 'cowlTopImages',
-      'firewallImages', 'acImages', 'reverseCameraImages',
-      'odometerReadingAfterTestDriveImages', 'bootDoorImages',
+      'frontWindshieldImages',
+      'roofImages',
+      'lhsHeadlampImages',
+      'lhsFoglampImages',
+      'rhsHeadlampImages',
+      'rhsFoglampImages',
+      'lhsFenderImages',
+      'lhsFrontTyreImages',
+      'lhsRunningBorderImages',
+      'lhsOrvmImages',
+      'lhsAPillarImages',
+      'lhsFrontDoorImages',
+      'lhsBPillarImages',
+      'lhsRearDoorImages',
+      'lhsCPillarImages',
+      'lhsRearTyreImages',
+      'spareTyreImages',
+      'bootFloorImages',
+      'rhsCPillarImages',
+      'rhsRearDoorImages',
+      'rhsBPillarImages',
+      'rhsFrontDoorImages',
+      'rhsAPillarImages',
+      'rhsRunningBorderImages',
+      'rhsFrontTyreImages',
+      'rhsRearTyreImages',
+      'rhsOrvmImages',
+      'rhsFenderImages',
+      'batteryImages',
+      'sunroofImages',
+      'lhsTailLampImages',
+      'rhsTailLampImages',
+      'rearWindshieldImages',
+      'chassisEmbossmentImages',
+      'vinPlateImages',
+      'roadTaxImages',
+      'pucImages',
+      'rtoNocImages',
+      'rtoForm28Images',
+      'frontWiperAndWasherImages',
+      'lhsRearFogLampImages',
+      'rhsRearFogLampImages',
+      'rearWiperAndWasherImages',
+      'spareWheelImages',
+      'cowlTopImages',
+      'firewallImages',
+      'acImages',
+      'reverseCameraImages',
+      'odometerReadingAfterTestDriveImages',
+      'bootDoorImages',
     ];
 
     // Helper to extract URL list from a value
@@ -621,17 +679,21 @@ class InspectionFormController extends GetxController {
     }
     // Also check direct new-API keys
     final bonnetClosed = extractUrls(carData['bonnetClosedImages']);
-    if (bonnetClosed.isNotEmpty) imageFiles['bonnetClosedImages'] = bonnetClosed;
+    if (bonnetClosed.isNotEmpty)
+      imageFiles['bonnetClosedImages'] = bonnetClosed;
     final bonnetOpen = extractUrls(carData['bonnetOpenImages']);
     if (bonnetOpen.isNotEmpty) imageFiles['bonnetOpenImages'] = bonnetOpen;
 
     // frontBumperImages → frontBumperLhs45DegreeImages + frontBumperRhs45DegreeImages + frontBumperImages
     final fbLhs45 = extractUrls(carData['frontBumperLhs45DegreeImages']);
-    if (fbLhs45.isNotEmpty) imageFiles['frontBumperLhs45DegreeImages'] = fbLhs45;
+    if (fbLhs45.isNotEmpty)
+      imageFiles['frontBumperLhs45DegreeImages'] = fbLhs45;
     final fbRhs45 = extractUrls(carData['frontBumperRhs45DegreeImages']);
-    if (fbRhs45.isNotEmpty) imageFiles['frontBumperRhs45DegreeImages'] = fbRhs45;
+    if (fbRhs45.isNotEmpty)
+      imageFiles['frontBumperRhs45DegreeImages'] = fbRhs45;
     final fbMain = extractUrls(carData['frontBumperImages']);
-    if (fbMain.isNotEmpty && imageFiles['frontBumperLhs45DegreeImages'] == null) {
+    if (fbMain.isNotEmpty &&
+        imageFiles['frontBumperLhs45DegreeImages'] == null) {
       imageFiles['frontBumperImages'] = fbMain;
     }
 
@@ -647,16 +709,22 @@ class InspectionFormController extends GetxController {
     }
 
     // lhsQuarterPanelImages — always populate from DB if available
-    final lhsQPWithDoor = extractUrls(carData['lhsQuarterPanelWithRearDoorOpenImages']);
-    if (lhsQPWithDoor.isNotEmpty) imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = lhsQPWithDoor;
+    final lhsQPWithDoor = extractUrls(
+      carData['lhsQuarterPanelWithRearDoorOpenImages'],
+    );
+    if (lhsQPWithDoor.isNotEmpty)
+      imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = lhsQPWithDoor;
     final lhsQPMain = extractUrls(carData['lhsQuarterPanelImages']);
     if (lhsQPMain.isNotEmpty) {
       imageFiles['lhsQuarterPanelImages'] = lhsQPMain;
     }
 
     // rhsQuarterPanelImages — always populate from DB if available
-    final rhsQPWithDoor = extractUrls(carData['rhsQuarterPanelWithRearDoorOpenImages']);
-    if (rhsQPWithDoor.isNotEmpty) imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = rhsQPWithDoor;
+    final rhsQPWithDoor = extractUrls(
+      carData['rhsQuarterPanelWithRearDoorOpenImages'],
+    );
+    if (rhsQPWithDoor.isNotEmpty)
+      imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = rhsQPWithDoor;
     final rhsQPMain = extractUrls(carData['rhsQuarterPanelImages']);
     if (rhsQPMain.isNotEmpty) {
       imageFiles['rhsQuarterPanelImages'] = rhsQPMain;
@@ -679,7 +747,7 @@ class InspectionFormController extends GetxController {
     // Boot Door Open: check multiple possible DB keys
     final bootOpenList = extractUrls(carData['rearWithBootDoorOpenImages']);
     final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages']);
-    
+
     if (bootOpenList.isNotEmpty) {
       imageFiles['rearWithBootDoorOpenImages'] = bootOpenList;
     } else if (bootOpenListAlt.isNotEmpty) {
@@ -692,13 +760,21 @@ class InspectionFormController extends GetxController {
       }
     }
 
-    // airbags array → individual airbag image fields
-    final airbagUrls = extractUrls(carData['airbags']);
+    // airbagimages array → individual airbag image fields
+    final airbagUrls = extractUrls(
+      carData['airbagImages'] ?? carData['airbagimages'] ?? carData['airbags'],
+    );
     final airbagKeys = [
-      'airbagImages', 'coDriverAirbagImages', 'driverSeatAirbagImages',
-      'coDriverSeatAirbagImages', 'rhsCurtainAirbagImages', 'lhsCurtainAirbagImages',
-      'driverKneeAirbagImages', 'coDriverKneeAirbagImages',
-      'rhsRearSideAirbagImages', 'lhsRearSideAirbagImages',
+      'driverAirbagImages',
+      'coDriverAirbagImages',
+      'driverSeatAirbagImages',
+      'coDriverSeatAirbagImages',
+      'rhsCurtainAirbagImages',
+      'lhsCurtainAirbagImages',
+      'driverKneeAirbagImages',
+      'coDriverKneeAirbagImages',
+      'rhsRearSideAirbagImages',
+      'lhsRearSideAirbagImages',
     ];
     for (int i = 0; i < airbagUrls.length && i < airbagKeys.length; i++) {
       if (airbagUrls[i].isNotEmpty) {
@@ -712,7 +788,9 @@ class InspectionFormController extends GetxController {
     }
 
     imageFiles.refresh();
-    debugPrint('✅ _preFillMedia completed: ${imageFiles.keys.length} image fields populated');
+    debugPrint(
+      '✅ _preFillMedia completed: ${imageFiles.keys.length} image fields populated',
+    );
   }
 
   Future<void> fetchDropdownList() async {
@@ -911,6 +989,12 @@ class InspectionFormController extends GetxController {
         'ownerSerialNumber': schedule?.ownershipSerialNumber.toString() ?? '',
       },
     );
+    imageFiles.clear();
+    mediaCloudinaryData.clear();
+    _currentlyUploading.clear();
+    pendingDeletions.clear();
+    apiFetchedLockedFields.clear();
+    _userEditedKeys.clear();
   }
 
   /// Persists the entire current form state (fields + images) to local storage.
@@ -952,8 +1036,10 @@ class InspectionFormController extends GetxController {
     final dropdownMap = <String, dynamic>{};
     dropdownOptions.forEach((k, v) => dropdownMap[k] = v);
     await _storage.write(_snapshotDropdownsKey, dropdownMap);
-    
-    debugPrint('💾 [Snapshot] Save Complete for $appointmentId. Fields: ${snapMap.length}, Images: ${imgMap.length}');
+
+    debugPrint(
+      '💾 [Snapshot] Save Complete for $appointmentId. Fields: ${snapMap.length}, Images: ${imgMap.length}',
+    );
   }
 
   /// Clears all snapshot data related to THIS appointmentId.
@@ -1026,10 +1112,12 @@ class InspectionFormController extends GetxController {
   void _syncScheduleWithChanges() {
     final data = inspectionData.value;
     if (data == null) return;
-    
+
     // Safety check: ensure we don't sync empty identity fields over valid schedule data
     if (data.make.isEmpty && (schedule?.make.isNotEmpty ?? false)) {
-      debugPrint('⚠️ [Sync] Skipping schedule update: restored Make is empty while schedule has data.');
+      debugPrint(
+        '⚠️ [Sync] Skipping schedule update: restored Make is empty while schedule has data.',
+      );
       return;
     }
 
@@ -1451,7 +1539,9 @@ class InspectionFormController extends GetxController {
 
       if (addToQueueOnFailure) {
         // Avoid duplicate entries in the queue
-        bool alreadyQueued = pendingDeletions.any((d) => d['publicId'] == publicId);
+        bool alreadyQueued = pendingDeletions.any(
+          (d) => d['publicId'] == publicId,
+        );
         if (!alreadyQueued) {
           pendingDeletions.add({
             'publicId': publicId,
@@ -1537,7 +1627,7 @@ class InspectionFormController extends GetxController {
       'rhsOrvmImages': 'rhsOrvm',
       'spareWheelImages': 'spareWheel',
       'spareTyreImages': 'spareTyre',
-      'airbagImages': 'airbagFeaturesDriverSide',
+      'driverAirbagImages': 'airbagFeaturesDriverSide',
       'coDriverAirbagImages': 'airbagFeaturesCoDriverSide',
       'driverSeatAirbagImages': 'driverSeatAirbag',
       'coDriverSeatAirbagImages': 'coDriverSeatAirbag',
@@ -1569,7 +1659,7 @@ class InspectionFormController extends GetxController {
     // --- Master Airbag Rule ---
     final airbagRelatedFields = [
       'airbagFeaturesDriverSide',
-      'airbagImages',
+      'driverAirbagImages',
       'airbagFeaturesCoDriverSide',
       'coDriverAirbagImages',
       'driverSeatAirbag',
@@ -1597,6 +1687,10 @@ class InspectionFormController extends GetxController {
       }
     }
 
+    // Default Superadmin override: if no specific rule hid the field, superadmin can see it
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') return true;
+
     return true;
   }
 
@@ -1611,6 +1705,10 @@ class InspectionFormController extends GetxController {
 
   /// Returns whether a field is required (i.e. not hidden and not optional).
   bool isFieldRequired(String key) {
+    // Superadmin bypass
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') return false;
+
     if (!isFieldVisible(key)) return false;
 
     // Find the field definition
@@ -1640,6 +1738,10 @@ class InspectionFormController extends GetxController {
   // ─── Navigation ───
   /// Returns a list of labels for required fields that are not yet filled in the current section.
   List<String> getUnfilledRequiredFields(int sectionIndex) {
+    // Superadmin bypass
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') return [];
+
     if (sectionIndex < 0 || sectionIndex >= InspectionFieldDefs.sections.length)
       return [];
 
@@ -1717,6 +1819,14 @@ class InspectionFormController extends GetxController {
   }
 
   void jumpToSection(int index) {
+    // Superadmin bypass
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') {
+      currentSectionIndex.value = index;
+      pageController.jumpToPage(index);
+      return;
+    }
+
     // ENFORCEMENT: If moving forward, must pass validation of current and intermediary sections
     if (index > currentSectionIndex.value && currentSectionIndex.value >= 0) {
       // Loop through sections between current and target to ensure no skip
@@ -1827,6 +1937,8 @@ class InspectionFormController extends GetxController {
   Future<void> submitInspection() async {
     final data = inspectionData.value;
     if (data == null) return;
+
+    final user = UserController.instance.user.value;
 
     // Validate ALL required fields across every section
     final missingBySection = <String, List<Map<String, String>>>{};
@@ -2065,7 +2177,7 @@ class InspectionFormController extends GetxController {
     // ══════════════════════════════════════════════════════════
     // RE-INSPECTION FLOW: Show Preview Dialog first
     // ══════════════════════════════════════════════════════════
-    if (isReInspection) {
+    if (isReInspection && user.id != 'superadmin') {
       _showReInspectionPreviewDialog(data);
       return;
     }
@@ -2112,6 +2224,16 @@ class InspectionFormController extends GetxController {
 
       // Add image URLs from Cloudinary uploads
       imageFiles.forEach((key, paths) {
+        if (const {
+          'airbagImages',
+          'airbagimages',
+          'lhsQuarterPanelImages',
+          'rhsQuarterPanelImages',
+          'bonnetImages',
+          'frontBumperImages',
+          'rearBumperImages',
+        }.contains(key)) return;
+
         if (paths.isNotEmpty) {
           final resolvedUrls =
               paths
@@ -2126,17 +2248,17 @@ class InspectionFormController extends GetxController {
       });
 
       // 🔍 DEBUG: bootDoorImages after imageFiles overlay
-      // debugPrint('🔍 payload[bootDoorImages] (after overlay) = ${payload['bootDoorImages']}');
+      // debugPrint('🔍 payload[airbagimages] (after overlay) = ${payload['airbagimages']}');
 
       // Ensure status is set to Inspected in the Car collection
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
       payload['auctionStatus'] = 'inspected';
 
-      // Ensure timestamp and inspectionDate represent IST but in UTC format
-      final nowIstUtc = _dateToIstUtcIso(DateTime.now());
-      payload['timestamp'] = nowIstUtc;
-      payload['inspectionDate'] = nowIstUtc;
+      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
+      payload['timestamp'] = nowUtcIso;
+      payload['inspectionDate'] = nowUtcIso;
+      payload['sendToAuctionApk'] = nowUtcIso;
 
       // Debug: dump date values in payload
       // debugPrint('📅 DATE VALUES IN PAYLOAD:');
@@ -2230,7 +2352,8 @@ class InspectionFormController extends GetxController {
             'inspectionStatus': 'Inspected',
             'status': 'Inspected',
             'remarks': schedule!.remarks ?? '',
-            'inspectionDateTime': nowIstUtc,
+            'version': _appVersion,
+            'inspectionDateTime': nowUtcIso,
           };
 
           // debugPrint('📡 PUT ${ApiConstants.updateTelecallingUrl}');
@@ -2912,8 +3035,11 @@ class InspectionFormController extends GetxController {
         }
       });
 
-      // Ensure timestamp is set
-      payload['timestamp'] = DateTime.now().toUtc().toIso8601String();
+      // Ensure timestamps represent IST moments converted to UTC
+      final nowUtcIso = DateTime.now().toUtc().toIso8601String();
+      payload['timestamp'] = nowUtcIso;
+      payload['inspectionDate'] = nowUtcIso;
+      payload['sendToAuctionApk'] = nowUtcIso;
 
       // For Re-Inspection: include carId and use PUT
       if (_reInspectionCarId != null) {
@@ -2923,7 +3049,6 @@ class InspectionFormController extends GetxController {
       // Set status to Inspected on successful Re-Inspection submit
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
-      payload['auctionStatus'] = 'inspected';
 
       // Keep the _id for the update API
       // Remove objectId only
@@ -2964,6 +3089,7 @@ class InspectionFormController extends GetxController {
             'inspectionStatus': 'Inspected',
             'status': 'Inspected',
             'remarks': schedule!.remarks ?? '',
+            'version': _appVersion,
           };
 
           if (schedule!.inspectionDateTime != null) {
@@ -3441,6 +3567,66 @@ class InspectionFormController extends GetxController {
     );
   }
 
+  // ─── Temporary Test Fill Feature ───
+  void tempTestFill() async {
+    for (final section in InspectionFieldDefs.sections) {
+      for (final field in section.fields) {
+        if (field.readonly) continue;
+
+        if (field.type == FType.text ||
+            field.type == FType.number ||
+            field.type == FType.dropdown ||
+            field.type == FType.searchable ||
+            field.type == FType.multiSelect) {
+          dynamic value = "test";
+          if (field.type == FType.number) {
+            value = "10";
+            if (field.key == 'ownerSerialNumber') value = "1";
+            if (field.key == 'seatingCapacity') value = "5";
+            if (field.key == 'cubicCapacity') value = "1200";
+            if (field.key == 'odometerReadingInKms') value = "50000";
+          }
+          if (field.type == FType.dropdown && field.options.isNotEmpty) {
+            value = field.options.first;
+          }
+          if (field.type == FType.multiSelect && field.options.isNotEmpty) {
+            value = [field.options.first];
+          }
+          if (field.type == FType.searchable) {
+            value = "test";
+          }
+          updateField(field.key, value);
+        } else if (field.type == FType.date) {
+          updateField(field.key, "2024-01-01");
+        }
+      }
+    }
+    _saveSnapshot();
+    inspectionData.refresh();
+    TLoaders.successSnackBar(
+      title: 'Test Fill',
+      message: 'Form filled with testing data (Superadmin only).',
+    );
+  }
+
+  // ─── Temporary Clear Form Feature ───
+  void tempClearForm() async {
+    _initializeNewInspection();
+    await _saveSnapshot();
+    inspectionData.refresh();
+
+    // Reset navigation to first section
+    currentSectionIndex.value = 0;
+    if (pageController.hasClients) {
+      pageController.jumpToPage(0);
+    }
+
+    TLoaders.successSnackBar(
+      title: 'Form Cleared',
+      message: 'The inspection form has been reset to an empty state.',
+    );
+  }
+
   // ─── CarModel Mapping Helpers ───
   CarModel _buildCarModelFromForm(InspectionFormModel data) {
     // Retrieve logged-in user info from local storage
@@ -3458,6 +3644,7 @@ class InspectionFormController extends GetxController {
       userEmail: userEmail,
       userName: userName,
       inspectionAddress: address,
+      appVersion: _appVersion,
     );
   }
 
@@ -3479,22 +3666,45 @@ class InspectionFormController extends GetxController {
     // ── Simple & Direct UserId Retrieval ──
     final String userId = AuthenticationRepository.instance.userId;
 
+    // ── Check Cache First ──
+    final cacheKey = 'attestr_cache_${regNo.toUpperCase()}';
+    final cachedResponse = _storage.read(cacheKey);
+
     try {
       isFetchingDetails.value = true;
 
-      // ── Step 1: Fetch vehicle registration details ──
-      final response = await ApiService.post(
-        ApiConstants.fetchVehicleDetailsUrl,
-        {"registrationNumber": regNo, "userId": userId},
-      );
+      Map<String, dynamic> response;
 
-      // Access data.result as specified
+      if (cachedResponse != null && cachedResponse is Map<String, dynamic>) {
+        response = cachedResponse;
+      } else {
+        // ── Step 1: Fetch vehicle registration details ──
+        response = await ApiService.post(
+          ApiConstants.fetchVehicleDetailsUrl,
+          {"registrationNumber": regNo, "userId": userId},
+        );
+
+        // Cache the successful response
+        await _storage.write(cacheKey, response);
+      }
+
+      // ── Step 1: Flatten the response for easier access (Avoid data.results nesting) ──
       final responseData = response['data'];
       if (responseData == null || responseData is! Map<String, dynamic>) {
         throw 'No details found for this registration number.';
       }
 
       final result = responseData['result'];
+      final Map<String, dynamic> flattened = {};
+
+      // Merge both high-level data and detailed result into one flat object
+      if (responseData is Map<String, dynamic>) flattened.addAll(responseData);
+      if (result is Map<String, dynamic>) flattened.addAll(result);
+
+      // Remove the nested result key to keep it flat as requested
+      flattened.remove('result');
+      inspectionData.value?.data['attesterRawCarDetails'] = flattened;
+
       if (result != null && result is Map<String, dynamic>) {
         _applyFetchedData(result);
       }
@@ -3538,12 +3748,19 @@ class InspectionFormController extends GetxController {
 
       for (final status in statuses) {
         try {
+          final Map<String, dynamic> body = {"inspectionStatus": status};
+
+          final user = UserController.instance.user.value;
+          if (user.id != 'superadmin') {
+            body["allocatedTo"] = userEmail;
+          }
+
           final response = await ApiService.post(
             ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
               limit: 100,
               pageNumber: 1,
             ),
-            {"inspectionStatus": status, "allocatedTo": userEmail},
+            body,
           );
 
           final List<dynamic> dataList = response['data'] ?? [];
@@ -3600,8 +3817,21 @@ class InspectionFormController extends GetxController {
     }
   }
 
+  /// Checks if a field is locked (either by definition or by API response)
+  bool isFieldLocked(F field) {
+    // Superadmin can edit anything
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') return false;
+
+    return field.readonly || apiFetchedLockedFields.contains(field.key);
+  }
+
   /// Checks if a field was locked by the API fetch response (non-editable)
   bool isFieldLockedByApi(String fieldKey) {
+    // Superadmin bypass
+    final user = UserController.instance.user.value;
+    if (user.id == 'superadmin') return false;
+
     return apiFetchedLockedFields.contains(fieldKey);
   }
 
@@ -3735,40 +3965,103 @@ class InspectionFormController extends GetxController {
         'manufacturing_date',
         'mfgDate',
       ],
-      'seatingCapacity': ['seatingCapacity', 'seating_capacity', 'seat_cap'],
+      'seatingCapacity': [
+        'seatingCapacity',
+        'seating_capacity',
+        'seat_cap',
+        'seats',
+        'capacity',
+        'seat_count',
+      ],
       'color': ['colorType', 'color', 'colour'],
-      'cubicCapacity': ['cubicCapacity', 'cubic_capacity', 'cc'],
-      'norms': ['normsType', 'norms', 'pollution_norms'],
-      'registeredRto': ['rto', 'registered_rto', 'rto_name'],
+      'cubicCapacity': [
+        'cubicCapacity',
+        'cubic_capacity',
+        'cc',
+        'cubic_cap',
+        'displacement',
+        'engine_capacity',
+        'engine_size',
+        'cc_rating',
+        'cubic_capacity_cc',
+        'displacement_cc',
+        'capacity_cc',
+      ],
+      'norms': [
+        'normsType',
+        'norms',
+        'pollution_norms',
+        'norms_type',
+        'emission_norms',
+      ],
+      'registeredRto': ['rto', 'registered_rto', 'rto_name', 'rto_code'],
       'ownerSerialNumber': [
         'ownerNumber',
         'owner_serial_number',
         'owner_count',
+        'owner_number',
+        'ownership_count',
       ],
-      'registeredOwner': ['owner', 'owner_name', 'registered_owner'],
+      'registeredOwner': [
+        'owner',
+        'owner_name',
+        'registered_owner',
+        'registered_owner_name',
+      ],
       'registeredAddressAsPerRc': [
         'currentAddress',
         'permanent_address',
         'address',
+        'owner_address',
       ],
-      'insuranceValidity': ['insuranceUpto', 'insurance_valid_upto'],
-      'insurer': ['insuranceProvider', 'insurance_company', 'insurer_name'],
+      'insuranceValidity': [
+        'insuranceUpto',
+        'insurance_valid_upto',
+        'insurance_expiry',
+      ],
+      'insurer': [
+        'insuranceProvider',
+        'insurance_company',
+        'insurer_name',
+        'insurance_name',
+      ],
       'insurancePolicyNumber': [
         'insurancePolicyNumber',
         'policy_no',
         'policyNumber',
       ],
-      'pucValidity': ['pollutionCertificateUpto', 'puc_upto', 'puc_validity'],
+      'pucValidity': [
+        'pollutionCertificateUpto',
+        'puc_upto',
+        'puc_validity',
+        'pollution_expiry',
+      ],
       'pucNumber': ['pollutionCertificateNumber', 'puc_number', 'pucNo'],
       'city': ['city', 'city_name'],
-      'taxValidTill': ['taxUpto', 'tax_validity', 'tax_paid_upto', 'tax_upto'],
+      'taxValidTill': [
+        'taxUpto',
+        'tax_validity',
+        'tax_paid_upto',
+        'tax_upto',
+        'tax_expiry',
+      ],
     };
 
     bool updatedAny = false;
     mapping.forEach((targetKey, sourceKeys) {
       final value = find(sourceKeys);
       if (value != null) {
-        updateField(targetKey, value.toString());
+        String finalValue = value.toString();
+
+        // 📝 Sanitize numeric strings (e.g., "1497.00" -> "1497")
+        if (targetKey == 'cubicCapacity' || targetKey == 'seatingCapacity') {
+          final parsed = double.tryParse(finalValue);
+          if (parsed != null) {
+            finalValue = parsed.round().toString();
+          }
+        }
+
+        updateField(targetKey, finalValue);
         updatedAny = true;
       }
     });

@@ -141,15 +141,21 @@ class ScheduleController extends GetxController {
   /// Fetch a single page for a given status and append results.
   Future<void> _fetchPageForStatus(String status, String userEmail) async {
     try {
+      final Map<String, dynamic> body = {
+        "inspectionStatus": status,
+      };
+
+      final user = UserController.instance.user.value;
+      if (user.id != 'superadmin') {
+        body["allocatedTo"] = userEmail;
+      }
+
       final response = await ApiService.post(
         ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
           limit: pageLimit,
           pageNumber: _currentPage,
         ),
-        {
-          "inspectionStatus": status,
-          "allocatedTo": userEmail,
-        },
+        body,
       );
 
       // Use 'total' from API response
@@ -184,15 +190,21 @@ class ScheduleController extends GetxController {
     await Future.wait(
       statuses.map((status) async {
         try {
+          final Map<String, dynamic> body = {
+            "inspectionStatus": status,
+          };
+
+          final user = UserController.instance.user.value;
+          if (user.id != 'superadmin') {
+            body["allocatedTo"] = userEmail;
+          }
+
           final response = await ApiService.post(
             ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
               limit: pageLimit,
               pageNumber: _currentPage,
             ),
-            {
-              "inspectionStatus": status,
-              "allocatedTo": userEmail,
-            },
+            body,
           );
 
           final apiTotal = response['total'] ?? 0;

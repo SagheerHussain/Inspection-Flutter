@@ -113,7 +113,7 @@ class CarModel {
   final List<String> lhsRearTyreImages;
   final List<String> lhsRearAlloyImages; // renamed to lhsRearWheelImages
   final List<String>
-  lhsQuarterPanelImages; // divided into lhsQuarterPanelWithRearDoorOpenImages and lhsQuarterPanelImages
+  lhsQuarterPanelImages; // divided into lhsQuarterPanelWithRearDoorOpenImages and lhsQuarterPanelWithRearDoorClosedImages
   final List<String> rearMain; // renamed to rearMainImages
   final String rearWithBootDoorOpen; // renamed to rearWithBootDoorOpenImages
   final List<String>
@@ -125,7 +125,7 @@ class CarModel {
   final List<String> bootFloorImages;
   final List<String> rhsRear45Degree; // renamed to rhsFullViewImages
   final List<String>
-  rhsQuarterPanelImages; // divided into rhsQuarterPanelWithRearDoorOpenImages and rhsQuarterPanelImages
+  rhsQuarterPanelImages; // divided into rhsQuarterPanelWithRearDoorOpenImages and rhsQuarterPanelWithRearDoorClosedImages
   final List<String> rhsRearAlloyImages; // renamed to rhsRearWheelImages
   final List<String> rhsRearTyreImages;
   final List<String> rhsCPillarImages;
@@ -212,9 +212,7 @@ class CarModel {
   final String leatherSeats; // removed and merged to seatsUpholstery
   final String fabricSeats; // removed and merged to seatsUpholstery
   final String commentsOnElectricals; // removed
-  final List<String>
-  meterConsoleWithEngineOn; // renamed to meterConsoleWithEngineOnImages
-  final List<String> airbags; // renamed to airbagImages
+  final List<String> meterConsoleWithEngineOn; // renamed to meterConsoleWithEngineOnImages
   final List<String> sunroofImages;
   final List<String>
   frontSeatsFromDriverSideDoorOpen; // renamed to frontSeatsFromDriverSideImages
@@ -309,6 +307,7 @@ class CarModel {
   final List<String> lhsFrontWheelImages;
   final List<String> lhsRearWheelImages;
   final List<String> lhsQuarterPanelWithRearDoorOpenImages;
+  final List<String> lhsQuarterPanelWithRearDoorClosedImages;
   final List<String> rearMainImages;
   final List<String> rearWithBootDoorOpenImages;
   final List<String> bootDoorImages;
@@ -316,6 +315,7 @@ class CarModel {
   final List<String> rearBumperRhs45DegreeImages;
   final List<String> rhsFullViewImages;
   final List<String> rhsQuarterPanelWithRearDoorOpenImages;
+  final List<String> rhsQuarterPanelWithRearDoorClosedImages;
   final List<String> rhsRearWheelImages;
   final List<String> rhsFrontWheelImages;
   final List<String> upperCrossMemberDropdownList;
@@ -429,6 +429,8 @@ class CarModel {
   final List<String> thirdRowSeatsDropdownList;
   final List<String> odometerReadingAfterTestDriveImages;
   final int odometerReadingAfterTestDriveInKms;
+  final String version;
+  final Map<String, dynamic>? attesterRawCarDetails;
 
   CarModel({
     required this.id,
@@ -626,7 +628,6 @@ class CarModel {
     required this.fabricSeats,
     required this.commentsOnElectricals,
     required this.meterConsoleWithEngineOn,
-    required this.airbags,
     required this.sunroofImages,
     required this.frontSeatsFromDriverSideDoorOpen,
     required this.rearSeatsFromRightSideDoorOpen,
@@ -651,6 +652,8 @@ class CarModel {
     required this.kmRangeLevel,
     required this.highestBidder,
     required this.v,
+    required this.version,
+    this.attesterRawCarDetails,
 
     // ✅ New fields (all nullable)
     required this.ieName,
@@ -718,6 +721,7 @@ class CarModel {
     required this.lhsFrontWheelImages,
     required this.lhsRearWheelImages,
     required this.lhsQuarterPanelWithRearDoorOpenImages,
+    required this.lhsQuarterPanelWithRearDoorClosedImages,
     required this.rearMainImages,
     required this.rearWithBootDoorOpenImages,
     required this.bootDoorImages,
@@ -725,6 +729,7 @@ class CarModel {
     required this.rearBumperRhs45DegreeImages,
     required this.rhsFullViewImages,
     required this.rhsQuarterPanelWithRearDoorOpenImages,
+    required this.rhsQuarterPanelWithRearDoorClosedImages,
     required this.rhsRearWheelImages,
     required this.rhsFrontWheelImages,
     required this.upperCrossMemberDropdownList,
@@ -962,7 +967,6 @@ class CarModel {
       spareTyreImages: parseStringList(json["spareTyreImages"]),
       bootFloorImages: parseStringList(json["bootFloorImages"]),
       rhsRear45Degree: parseStringList(json["rhsRear45Degree"]),
-      rhsQuarterPanelImages: parseStringList(json["rhsQuarterPanelImages"]),
       rhsRearAlloyImages: parseStringList(json["rhsRearAlloyImages"]),
       rhsRearTyreImages: parseStringList(json["rhsRearTyreImages"]),
       rhsCPillarImages: parseStringList(json["rhsCPillarImages"]),
@@ -1049,7 +1053,6 @@ class CarModel {
       meterConsoleWithEngineOn: parseStringList(
         json["meterConsoleWithEngineOn"],
       ),
-      airbags: parseStringList(json["airbags"]),
       sunroofImages: parseStringList(json["sunroofImages"]),
       frontSeatsFromDriverSideDoorOpen: parseStringList(
         json["frontSeatsFromDriverSideDoorOpen"],
@@ -1194,6 +1197,9 @@ class CarModel {
       lhsQuarterPanelWithRearDoorOpenImages: parseStringList(
         json["lhsQuarterPanelWithRearDoorOpenImages"],
       ),
+      lhsQuarterPanelWithRearDoorClosedImages: parseStringList(
+        json["lhsQuarterPanelWithRearDoorClosedImages"],
+      ),
       rearMainImages: parseStringList(json["rearMainImages"]),
       rearWithBootDoorOpenImages: parseStringList(
          json["rearWithBootDoorOpenImages"],
@@ -1209,6 +1215,10 @@ class CarModel {
       rhsQuarterPanelWithRearDoorOpenImages: parseStringList(
         json["rhsQuarterPanelWithRearDoorOpenImages"],
       ),
+      rhsQuarterPanelWithRearDoorClosedImages: parseStringList(
+        json["rhsQuarterPanelWithRearDoorClosedImages"],
+      ),
+      rhsQuarterPanelImages: parseStringList(json["rhsQuarterPanelImages"]),
       rhsRearWheelImages: parseStringList(json["rhsRearWheelImages"]),
       rhsFrontWheelImages: parseStringList(json["rhsFrontWheelImages"]),
       upperCrossMemberDropdownList: parseStringList(
@@ -1313,7 +1323,9 @@ class CarModel {
       meterConsoleWithEngineOnImages: parseStringList(
         json["meterConsoleWithEngineOnImages"],
       ),
-      airbagImages: parseStringList(json["airbagImages"]),
+      airbagImages: parseStringList(
+        json["airbagImages"] ?? json["airbagimages"] ?? json["airbags"],
+      ),
       frontSeatsFromDriverSideImages: parseStringList(
         json["frontSeatsFromDriverSideImages"],
       ),
@@ -1403,6 +1415,7 @@ class CarModel {
       ),
       odometerReadingAfterTestDriveInKms:
           json["odometerReadingAfterTestDriveInKms"] ?? 0,
+      version: json["version"] ?? json["appVersion"] ?? 'Unknown',
     );
   }
 
@@ -1529,7 +1542,6 @@ class CarModel {
     "spareTyreImages": spareTyreImages.map((x) => x).toList(),
     "bootFloorImages": bootFloorImages.map((x) => x).toList(),
     "rhsRear45Degree": rhsRear45Degree.map((x) => x).toList(),
-    "rhsQuarterPanelImages": rhsQuarterPanelImages.map((x) => x).toList(),
     "rhsRearAlloyImages": rhsRearAlloyImages,
     "rhsRearTyreImages": rhsRearTyreImages,
     "rhsCPillarImages": rhsCPillarImages,
@@ -1606,7 +1618,6 @@ class CarModel {
     "fabricSeats": fabricSeats,
     "commentsOnElectricals": commentsOnElectricals,
     "meterConsoleWithEngineOn": meterConsoleWithEngineOn.map((x) => x).toList(),
-    "airbags": airbags.map((x) => x).toList(),
     "sunroofImages": sunroofImages,
     "frontSeatsFromDriverSideDoorOpen":
         frontSeatsFromDriverSideDoorOpen.map((x) => x).toList(),
@@ -1717,6 +1728,8 @@ class CarModel {
     "lhsRearWheelImages": lhsRearWheelImages.map((x) => x).toList(),
     "lhsQuarterPanelWithRearDoorOpenImages":
         lhsQuarterPanelWithRearDoorOpenImages.map((x) => x).toList(),
+    "lhsQuarterPanelWithRearDoorClosedImages":
+        lhsQuarterPanelWithRearDoorClosedImages.map((x) => x).toList(),
     "rearMainImages": rearMainImages.map((x) => x).toList(),
     "rearWithBootDoorOpenImages":
         rearWithBootDoorOpenImages.map((x) => x).toList(),
@@ -1730,6 +1743,9 @@ class CarModel {
     "rhsFullViewImages": rhsFullViewImages.map((x) => x).toList(),
     "rhsQuarterPanelWithRearDoorOpenImages":
         rhsQuarterPanelWithRearDoorOpenImages.map((x) => x).toList(),
+    "rhsQuarterPanelWithRearDoorClosedImages":
+        rhsQuarterPanelWithRearDoorClosedImages.map((x) => x).toList(),
+    "rhsQuarterPanelImages": rhsQuarterPanelImages.map((x) => x).toList(),
     "rhsRearWheelImages": rhsRearWheelImages.map((x) => x).toList(),
     "rhsFrontWheelImages": rhsFrontWheelImages.map((x) => x).toList(),
     "upperCrossMemberDropdownList":
@@ -1876,6 +1892,9 @@ class CarModel {
     "odometerReadingAfterTestDriveImages":
         odometerReadingAfterTestDriveImages.map((x) => x).toList(),
     "odometerReadingAfterTestDriveInKms": odometerReadingAfterTestDriveInKms,
+    "version": version,
+    "appVersion": version,
+    "attesterRawCarDetails": attesterRawCarDetails,
   };
 }
 

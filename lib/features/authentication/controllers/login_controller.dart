@@ -63,10 +63,30 @@ class LoginController extends GetxController {
       }
 
       // 1. Authenticate using Custom CRM API
-      final Map<String, dynamic> response = await ApiService.post(
-        ApiConstants.loginUrl,
-        {'userName': userName.text.trim(), 'password': password.text.trim()},
-      );
+      Map<String, dynamic> response;
+      if (userName.text.trim() == 'superadmin' &&
+          password.text.trim() == 'Abc123***') {
+        // Superadmin Bypass
+        response = {
+          'user': {
+            '_id': 'superadmin',
+            'fullName': 'Super Admin',
+            'userName': 'superadmin',
+            'email': 'superadmin@otobix.in',
+            'phoneNumber': '000000000',
+            'role': 'admin',
+            'verificationStatus': 'approved',
+            'isEmailVerified': true,
+            'isProfileActive': true,
+          },
+          'token': 'superadmin_token',
+        };
+      } else {
+        response = await ApiService.post(ApiConstants.loginUrl, {
+          'userName': userName.text.trim(),
+          'password': password.text.trim(),
+        });
+      }
 
       // Check if response contains user data
       if (response['user'] == null) {

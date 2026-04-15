@@ -27,7 +27,9 @@ String _s(InspectionFormModel d, String key) {
 int _i(InspectionFormModel d, String key) {
   final v = d.data[key];
   if (v is int) return v;
-  if (v is String) return int.tryParse(v) ?? 0;
+  if (v is String) {
+    return int.tryParse(v) ?? double.tryParse(v)?.round() ?? 0;
+  }
   if (v is List && v.isNotEmpty) {
     final first = v.first;
     if (first is int) return first;
@@ -103,6 +105,7 @@ CarModel buildCarModelFromForm(
   String userEmail = '',
   String userName = '',
   String inspectionAddress = '',
+  String appVersion = 'Unknown',
 }) {
   // ── Helper shortcuts ──
   String s(String k) => _s(data, k);
@@ -141,6 +144,19 @@ CarModel buildCarModelFromForm(
           ? s('steeringMountedMediaControls')
           : steeringAudioVal;
 
+  final airbagsList = [
+    img('driverAirbagImages').firstOrNull ?? '',
+    img('coDriverAirbagImages').firstOrNull ?? '',
+    img('driverSeatAirbagImages').firstOrNull ?? '',
+    img('coDriverSeatAirbagImages').firstOrNull ?? '',
+    img('rhsCurtainAirbagImages').firstOrNull ?? '',
+    img('lhsCurtainAirbagImages').firstOrNull ?? '',
+    img('driverKneeAirbagImages').firstOrNull ?? '',
+    img('coDriverKneeAirbagImages').firstOrNull ?? '',
+    img('rhsRearSideAirbagImages').firstOrNull ?? '',
+    img('lhsRearSideAirbagImages').firstOrNull ?? '',
+  ];
+
   // apronLhsRhs → divided into lhsApronImages and rhsApronImages
   // The form has separate lhsApronImages and rhsApronImages
   final lhsApronImgs = img('lhsApronImages');
@@ -160,13 +176,13 @@ CarModel buildCarModelFromForm(
   final rbRhs45 = img('rearBumperRhs45DegreeImages');
   final rbImgs = img('rearBumperImages');
 
-  // lhsQuarterPanelImages → divided
-  final lhsQPWithDoor = img('lhsQuarterPanelWithRearDoorOpenImages');
-  final lhsQPImgs = img('lhsQuarterPanelImages');
+  // lhsQuarterPanelImages → divided into Open and Closed
+  final lhsQPWithDoorOpen = img('lhsQuarterPanelWithRearDoorOpenImages');
+  final lhsQPWithDoorClosed = img('lhsQuarterPanelWithRearDoorClosedImages');
 
-  // rhsQuarterPanelImages → divided
-  final rhsQPWithDoor = img('rhsQuarterPanelWithRearDoorOpenImages');
-  final rhsQPImgs = img('rhsQuarterPanelImages');
+  // rhsQuarterPanelImages → divided into Open and Closed
+  final rhsQPWithDoorOpen = img('rhsQuarterPanelWithRearDoorOpenImages');
+  final rhsQPWithDoorClosed = img('rhsQuarterPanelWithRearDoorClosedImages');
 
   return CarModel(
     id: data.id,
@@ -310,8 +326,11 @@ CarModel buildCarModelFromForm(
     lhsRearTyreImages: img('lhsRearTyreImages'),
     // renamed to lhsRearWheelImages
     lhsRearAlloyImages: img('lhsRearWheelImages'),
-    // divided into lhsQuarterPanelWithRearDoorOpenImages and lhsQuarterPanelImages
-    lhsQuarterPanelImages: [...lhsQPWithDoor, ...lhsQPImgs],
+    // divided into lhsQuarterPanelWithRearDoorOpenImages and lhsQuarterPanelWithRearDoorClosedImages
+    lhsQuarterPanelImages: [
+      lhsQPWithDoorOpen.firstOrNull ?? '',
+      lhsQPWithDoorClosed.firstOrNull ?? '',
+    ],
     // renamed to rearMainImages
     rearMain: img('rearMainImages'),
     // renamed to rearWithBootDoorOpenImages
@@ -328,8 +347,11 @@ CarModel buildCarModelFromForm(
     bootFloorImages: img('bootFloorImages'),
     // renamed to rhsFullViewImages
     rhsRear45Degree: img('rhsFullViewImages'),
-    // divided
-    rhsQuarterPanelImages: [...rhsQPWithDoor, ...rhsQPImgs],
+    // divided into rhsQuarterPanelWithRearDoorOpenImages and rhsQuarterPanelWithRearDoorClosedImages
+    rhsQuarterPanelImages: [
+      rhsQPWithDoorOpen.firstOrNull ?? '',
+      rhsQPWithDoorClosed.firstOrNull ?? '',
+    ],
     // renamed to rhsRearWheelImages
     rhsRearAlloyImages: img('rhsRearWheelImages'),
     rhsRearTyreImages: img('rhsRearTyreImages'),
@@ -444,19 +466,6 @@ CarModel buildCarModelFromForm(
     commentsOnElectricals: s('commentsOnElectricals'),
     // renamed
     meterConsoleWithEngineOn: img('meterConsoleWithEngineOnImages'),
-    airbags:
-        [
-          img('airbagImages').firstOrNull,
-          img('coDriverAirbagImages').firstOrNull,
-          img('driverSeatAirbagImages').firstOrNull,
-          img('coDriverSeatAirbagImages').firstOrNull,
-          img('rhsCurtainAirbagImages').firstOrNull,
-          img('lhsCurtainAirbagImages').firstOrNull,
-          img('driverKneeAirbagImages').firstOrNull,
-          img('coDriverKneeAirbagImages').firstOrNull,
-          img('rhsRearSideAirbagImages').firstOrNull,
-          img('lhsRearSideAirbagImages').firstOrNull,
-        ].whereType<String>().toList(),
     sunroofImages: img('sunroofImages'),
     frontSeatsFromDriverSideDoorOpen: img('frontSeatsFromDriverSideImages'),
     rearSeatsFromRightSideDoorOpen: img('rearSeatsFromRightSideImages'),
@@ -482,6 +491,7 @@ CarModel buildCarModelFromForm(
     kmRangeLevel: i('kmRangeLevel'),
     highestBidder: s('highestBidder'),
     v: i('__v'),
+    version: appVersion,
 
     // ✅ New fields (all nullable) — below the comment line
     ieName:
@@ -551,14 +561,16 @@ CarModel buildCarModelFromForm(
     lhsFullViewImages: img('lhsFullViewImages'),
     lhsFrontWheelImages: img('lhsFrontWheelImages'),
     lhsRearWheelImages: img('lhsRearWheelImages'),
-    lhsQuarterPanelWithRearDoorOpenImages: lhsQPWithDoor,
+    lhsQuarterPanelWithRearDoorOpenImages: lhsQPWithDoorOpen,
+    lhsQuarterPanelWithRearDoorClosedImages: lhsQPWithDoorClosed,
     rearMainImages: img('rearMainImages'),
     rearWithBootDoorOpenImages: img('rearWithBootDoorOpenImages'),
     bootDoorImages: img('bootDoorImages'),
     rearBumperLhs45DegreeImages: rbLhs45,
     rearBumperRhs45DegreeImages: rbRhs45,
     rhsFullViewImages: img('rhsFullViewImages'),
-    rhsQuarterPanelWithRearDoorOpenImages: rhsQPWithDoor,
+    rhsQuarterPanelWithRearDoorOpenImages: rhsQPWithDoorOpen,
+    rhsQuarterPanelWithRearDoorClosedImages: rhsQPWithDoorClosed,
     rhsRearWheelImages: img('rhsRearWheelImages'),
     rhsFrontWheelImages: img('rhsFrontWheelImages'),
     upperCrossMemberDropdownList: asList('upperCrossMember'),
@@ -616,7 +628,7 @@ CarModel buildCarModelFromForm(
     sunroofDropdownList: asList('sunroof'),
     seatsUpholstery: seatsUpholsteryVal,
     meterConsoleWithEngineOnImages: img('meterConsoleWithEngineOnImages'),
-    airbagImages: img('airbagImages'),
+    airbagImages: airbagsList,
     frontSeatsFromDriverSideImages: img('frontSeatsFromDriverSideImages'),
     rearSeatsFromRightSideImages: img('rearSeatsFromRightSideImages'),
     dashboardImages: img('dashboardImages'),
@@ -674,5 +686,6 @@ CarModel buildCarModelFromForm(
       'odometerReadingAfterTestDriveImages',
     ),
     odometerReadingAfterTestDriveInKms: i('odometerReadingAfterTestDriveInKms'),
+    attesterRawCarDetails: data.data['attesterRawCarDetails'],
   );
 }

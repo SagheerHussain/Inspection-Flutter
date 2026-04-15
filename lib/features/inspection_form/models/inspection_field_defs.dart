@@ -430,9 +430,14 @@ class InspectionFieldDefs {
         ]),
         F.img(
           'lhsQuarterPanelWithRearDoorOpenImages',
-          'LHS Quarter Panel With Boot Door Open Image',
+          'LHS Quarter Panel With Rear Door Open Image',
+          maxImages: 1,
         ),
-        F.img('lhsQuarterPanelImages', 'LHS Quarter Panel Image'),
+        F.img(
+          'lhsQuarterPanelWithRearDoorClosedImages',
+          'LHS Quarter Panel With Rear Door Closed Image',
+          maxImages: 1,
+        ),
       ],
     ),
 
@@ -518,9 +523,14 @@ class InspectionFieldDefs {
         ]),
         F.img(
           'rhsQuarterPanelWithRearDoorOpenImages',
-          'RHS Quarter Panel With Boot Door Open',
+          'RHS Quarter Panel With Rear Door Open Image',
+          maxImages: 1,
         ),
-        F.img('rhsQuarterPanelImages', 'RHS Quarter Panel Image'),
+        F.img(
+          'rhsQuarterPanelWithRearDoorClosedImages',
+          'RHS Quarter Panel With Rear Door Closed Image',
+          maxImages: 1,
+        ),
         F.multi('rhsRearAlloy', 'RHS Rear Wheel', [
           'OK',
           'Bent',
@@ -763,7 +773,11 @@ class InspectionFieldDefs {
           'Damaged',
         ]),
         F.text('electricals', 'Electricals', optional: true),
-        F.text('commentsOnElectricals', 'Comments on Electricals', optional: true),
+        F.text(
+          'commentsOnElectricals',
+          'Comments on Electricals',
+          optional: true,
+        ),
         F.multi('musicSystem', 'Music System', [
           'Working',
           'Not Working',
@@ -890,62 +904,94 @@ class InspectionFieldDefs {
           'Deployed',
           'Not Applicable',
         ]),
-        F.img('airbagImages', 'Driver Airbag Image'),
+        F.img('driverAirbagImages', 'Driver Airbag Image', maxImages: 1),
         F.drop('airbagFeaturesCoDriverSide', 'Co-Driver Airbag', [
           'Present',
           'Not Present',
           'Deployed',
           'Not Applicable',
         ]),
-        F.img('coDriverAirbagImages', 'Co-Driver Airbag Image'),
+        F.img('coDriverAirbagImages', 'Co-Driver Airbag Image', maxImages: 1),
         F.drop('driverSeatAirbag', 'Driver Seat Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('driverSeatAirbagImages', 'Driver Seat Airbag Image'),
+        F.img(
+          'driverSeatAirbagImages',
+          'Driver Seat Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('coDriverSeatAirbag', 'Co-Driver Seat Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('coDriverSeatAirbagImages', 'Co-Driver Seat Airbag Image'),
+        F.img(
+          'coDriverSeatAirbagImages',
+          'Co-Driver Seat Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('rhsCurtainAirbag', 'RHS Curtain Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('rhsCurtainAirbagImages', 'RHS Curtain Airbag Image'),
+        F.img(
+          'rhsCurtainAirbagImages',
+          'RHS Curtain Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('lhsCurtainAirbag', 'LHS Curtain Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('lhsCurtainAirbagImages', 'LHS Curtain Airbag Image'),
+        F.img(
+          'lhsCurtainAirbagImages',
+          'LHS Curtain Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('driverSideKneeAirbag', 'Driver Knee Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('driverKneeAirbagImages', 'Driver Knee Airbag Image'),
+        F.img(
+          'driverKneeAirbagImages',
+          'Driver Knee Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('coDriverKneeSeatAirbag', 'Co-Driver Knee Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('coDriverKneeAirbagImages', 'Co-Driver Knee Airbag Image'),
+        F.img(
+          'coDriverKneeAirbagImages',
+          'Co-Driver Knee Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('rhsRearSideAirbag', 'RHS Rear Side Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('rhsRearSideAirbagImages', 'RHS Rear Side Airbag Image'),
+        F.img(
+          'rhsRearSideAirbagImages',
+          'RHS Rear Side Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('lhsRearSideAirbag', 'LHS Rear Side Airbag', [
           'Present',
           'Not Present',
           'Not Applicable',
         ]),
-        F.img('lhsRearSideAirbagImages', 'LHS Rear Side Airbag Image'),
+        F.img(
+          'lhsRearSideAirbagImages',
+          'LHS Rear Side Airbag Image',
+          maxImages: 1,
+        ),
         F.drop('seatsUpholstery', 'Seat Upholstery', [
           'Fabric',
           'Leather',

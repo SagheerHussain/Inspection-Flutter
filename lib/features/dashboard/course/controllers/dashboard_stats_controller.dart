@@ -81,12 +81,21 @@ class DashboardStatsController extends GetxController {
       await Future.wait(
         fetchStatuses.map((status) async {
           try {
+            final Map<String, dynamic> body = {
+              "inspectionStatus": status,
+            };
+
+            final user = UserController.instance.user.value;
+            if (user.id != 'superadmin') {
+              body["allocatedTo"] = userEmail;
+            }
+
             final response = await ApiService.post(
               ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
                 limit: 20,
                 pageNumber: 1,
               ),
-              {"inspectionStatus": status, "allocatedTo": userEmail},
+              body,
             );
 
             // Use the 'total' field from API response for accurate count

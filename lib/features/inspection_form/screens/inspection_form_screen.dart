@@ -7,6 +7,7 @@ import 'package:video_player/video_player.dart';
 import '../../schedules/models/schedule_model.dart';
 import '../controllers/inspection_form_controller.dart';
 import '../models/inspection_field_defs.dart';
+import '../../../personalization/controllers/user_controller.dart';
 
 // ─── Custom accent color (replaces TColors.primary yellow) ───
 const Color _accent = Color(0xFF0D6EFD); // Vibrant royal blue
@@ -320,9 +321,105 @@ class _AppBar extends StatelessWidget {
               ],
             ),
           ),
+          _TestFillButton(controller: controller),
+          _ClearFormButton(controller: controller),
         ],
       ),
     );
+  }
+}
+
+// ─── Superadmin Test Fill Button ───
+class _TestFillButton extends StatelessWidget {
+  final InspectionFormController controller;
+  const _TestFillButton({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final user = UserController.instance.user.value;
+      if (user.id != 'superadmin') return const SizedBox.shrink();
+
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: GestureDetector(
+          onTap: () => controller.tempTestFill(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.orange.withValues(alpha: 0.5),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.science, color: Colors.orange, size: 14),
+                const SizedBox(width: 6),
+                const Text(
+                  'Test Fill',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+}
+
+// ─── Superadmin Clear Form Button ───
+class _ClearFormButton extends StatelessWidget {
+  final InspectionFormController controller;
+  const _ClearFormButton({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final user = UserController.instance.user.value;
+      if (user.id != 'superadmin') return const SizedBox.shrink();
+
+      return Padding(
+        padding: const EdgeInsets.only(left: 8),
+        child: GestureDetector(
+          onTap: () => controller.tempClearForm(),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.red.withValues(alpha: 0.25),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: Colors.red.withValues(alpha: 0.5),
+                width: 1,
+              ),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.delete_sweep_rounded, color: Colors.red, size: 14),
+                SizedBox(width: 6),
+                const Text(
+                  'Clear',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
   }
 }
 
@@ -732,9 +829,7 @@ class _BoundTextFieldState extends State<_BoundTextField> {
 
       final isFilled = value.isNotEmpty;
 
-      final isLocked =
-          widget.field.readonly ||
-          widget.controller.isFieldLockedByApi(widget.field.key);
+      final isLocked = widget.controller.isFieldLocked(widget.field);
 
       return Container(
         margin: const EdgeInsets.only(bottom: 14),
@@ -911,8 +1006,7 @@ class _BoundDateField extends StatelessWidget {
       }
 
       final isFilled = displayText.isNotEmpty;
-      final isLocked =
-          field.readonly || controller.isFieldLockedByApi(field.key);
+      final isLocked = controller.isFieldLocked(field);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -1015,8 +1109,7 @@ class _BoundDateTimeField extends StatelessWidget {
       }
 
       final isFilled = displayText.isNotEmpty;
-      final isLocked =
-          field.readonly || controller.isFieldLockedByApi(field.key);
+      final isLocked = controller.isFieldLocked(field);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -1168,9 +1261,7 @@ class _BoundNumberFieldState extends State<_BoundNumberField> {
 
       final isFilled = displayVal.isNotEmpty;
 
-      final isLocked =
-          widget.field.readonly ||
-          widget.controller.isFieldLockedByApi(widget.field.key);
+      final isLocked = widget.controller.isFieldLocked(widget.field);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -1243,9 +1334,7 @@ class _BoundDropdownState extends State<_BoundDropdown> {
 
       final isFilled = selectedValue != null && selectedValue.isNotEmpty;
 
-      final isLocked =
-          widget.field.readonly ||
-          widget.controller.isFieldLockedByApi(widget.field.key);
+      final isLocked = widget.controller.isFieldLocked(widget.field);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -1334,8 +1423,7 @@ class _BoundMultiSelectDropdown extends StatelessWidget {
 
       final isFilled = selectedItems.isNotEmpty;
 
-      final isLocked =
-          field.readonly || controller.isFieldLockedByApi(field.key);
+      final isLocked = controller.isFieldLocked(field);
 
       return _fieldWrapper(
         isFilled: isFilled,
@@ -2139,6 +2227,8 @@ class _ImageThumbnail extends StatelessWidget {
 
               // NEW: Uploading Status Overlay
               Obx(() {
+                // Access observable early to avoid "improper use of GetX" error when returning early
+                controller.mediaCloudinaryData.length;
                 final isUploaded = controller.isMediaUploaded(path);
                 if (isUploaded) return const SizedBox.shrink();
 
@@ -2365,6 +2455,8 @@ class _VideoThumbnail extends StatelessWidget {
 
             // NEW: Uploading Status Overlay
             Obx(() {
+              // Access observable early to avoid "improper use of GetX" error when returning early
+              controller.mediaCloudinaryData.length;
               final isUploaded = controller.isMediaUploaded(path);
               if (isUploaded) return const SizedBox.shrink();
 
@@ -2722,8 +2814,7 @@ class _BoundSearchableDropdownState extends State<_BoundSearchableDropdown> {
       final model = widget.controller.getFieldValue('model');
 
       // Explicitly touch the RxSet so Obx re-renders when it changes
-      final lockedFields = widget.controller.apiFetchedLockedFields.toSet();
-      final isLockedByApi = lockedFields.contains(widget.field.key);
+      final isLockedByApi = widget.controller.isFieldLockedByApi(widget.field.key);
 
       bool isDependencyMissing = false;
       String? missingDependencyLabel;
