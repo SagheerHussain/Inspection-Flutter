@@ -61,47 +61,47 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            SingleChildScrollView(
-              child: Container(
-                padding: const EdgeInsets.all(TSizes.defaultSpace),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: TSizes.appBarHeight),
-                    const FormHeaderWidget(
-                      image: TImages.tLogoImage,
-                      title: "Engineer Login", // More specific title
-                      subTitle:
-                          "Welcome back, please enter your details to continue.",
-                      imageHeight: 0.16,
-                    ),
-                    const SizedBox(height: TSizes.spaceBtwSections),
-                    const LoginFormWidget(),
-                  ],
+            Positioned.fill(
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: Container(
+                  padding: const EdgeInsets.all(TSizes.defaultSpace),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: TSizes.appBarHeight + 20),
+                      const FormHeaderWidget(
+                        image: TImages.tLogoImage,
+                        title: "Engineer Login",
+                        subTitle:
+                            "Welcome back, please enter your details to continue.",
+                        imageHeight: 0.16,
+                      ),
+                      const SizedBox(height: TSizes.spaceBtwSections),
+                      const LoginFormWidget(),
+                    ],
+                  ),
                 ),
               ),
             ),
-
           ],
         ),
-        // App Version at the absolute bottom center as a pure footer
-        bottomNavigationBar: _version.isNotEmpty
-            ? SafeArea(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
-                  child: Text(
-                    "Version $_version",
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Colors.grey.shade400,
-                          letterSpacing: 0.6,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 10,
-                        ),
+        // Always provide a bottomNavigationBar to avoid layout jumps/animations
+        bottomNavigationBar: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              _version.isNotEmpty ? "Version $_version" : "Loading version...",
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: Colors.grey.shade400,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
                   ),
-                ),
-              )
-            : null,
+            ),
+          ),
+        ),
       ),
     );
   }

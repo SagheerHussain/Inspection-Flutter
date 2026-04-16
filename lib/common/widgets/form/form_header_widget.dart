@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../utils/constants/sizes.dart';
 
 class FormHeaderWidget extends StatelessWidget {
   const FormHeaderWidget({
@@ -29,8 +30,9 @@ class FormHeaderWidget extends StatelessWidget {
       crossAxisAlignment: crossAxisAlignment,
       children: [
         Image(image: AssetImage(image), color: imageColor, height: size.height * imageHeight),
-        SizedBox(height: heightBetween),
+        const SizedBox(height: TSizes.sm),
         Text(title, style: Theme.of(context).textTheme.displayLarge),
+        const SizedBox(height: TSizes.xs),
         Text(subTitle, textAlign: textAlign, style: Theme.of(context).textTheme.bodyLarge),
       ],
     );
