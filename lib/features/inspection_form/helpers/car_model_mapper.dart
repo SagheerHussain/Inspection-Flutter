@@ -415,7 +415,7 @@ CarModel buildCarModelFromForm(
     rearWiperWasher: s('rearWiperWasher'),
     rearDefogger: s('rearDefogger'),
     // removed and merged into infotainmentSystemDropdownList
-    musicSystem: musicSystemOld,
+
     stereo: stereoOld,
     inbuiltSpeaker: s('inbuiltSpeaker'),
     externalSpeaker: s('externalSpeaker'),
