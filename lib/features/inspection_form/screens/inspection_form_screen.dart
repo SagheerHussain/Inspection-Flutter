@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
@@ -338,7 +339,7 @@ class _TestFillButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Obx(() {
       final user = UserController.instance.user.value;
-      if (user.id != 'superadmin') return const SizedBox.shrink();
+      if (user.id != 'superadmin' && !kDebugMode) return const SizedBox.shrink();
 
       return Padding(
         padding: const EdgeInsets.only(left: 8),
@@ -2225,41 +2226,6 @@ class _ImageThumbnail extends StatelessWidget {
                 ),
               ),
 
-              // NEW: Uploading Status Overlay
-              Obx(() {
-                // Access observable early to avoid "improper use of GetX" error when returning early
-                controller.mediaCloudinaryData.length;
-                final isUploaded = controller.isMediaUploaded(path);
-                if (isUploaded) return const SizedBox.shrink();
-
-                return Positioned.fill(
-                  child: Container(
-                    color: Colors.black.withValues(alpha: 0.4),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation(Colors.white),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Uploading...',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
             ],
           ),
         ),
@@ -2453,41 +2419,6 @@ class _VideoThumbnail extends StatelessWidget {
               ),
             ),
 
-            // NEW: Uploading Status Overlay
-            Obx(() {
-              // Access observable early to avoid "improper use of GetX" error when returning early
-              controller.mediaCloudinaryData.length;
-              final isUploaded = controller.isMediaUploaded(path);
-              if (isUploaded) return const SizedBox.shrink();
-
-              return Positioned.fill(
-                child: Container(
-                  color: Colors.black.withValues(alpha: 0.4),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Uploading...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              );
-            }),
           ],
         ),
       ),

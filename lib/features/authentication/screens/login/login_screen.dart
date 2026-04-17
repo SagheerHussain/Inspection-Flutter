@@ -62,26 +62,31 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
             Positioned.fill(
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Container(
-                  padding: const EdgeInsets.all(TSizes.defaultSpace),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const SizedBox(height: TSizes.appBarHeight + 20),
-                      const FormHeaderWidget(
-                        image: TImages.tLogoImage,
-                        title: "Engineer Login",
-                        subTitle:
-                            "Welcome back, please enter your details to continue.",
-                        imageHeight: 0.16,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Container(
+                        padding: const EdgeInsets.all(TSizes.defaultSpace),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            const SizedBox(height: TSizes.spaceBtwSections),
+                            Image.asset(
+                              "assets/images/profile/logoLoginWS.png",
+                              height: MediaQuery.of(context).size.height * 0.20,
+                            ),
+                            const SizedBox(height: TSizes.spaceBtwItems),
+                            const LoginFormWidget(),
+                          ],
+                        ),
                       ),
-                      const SizedBox(height: TSizes.spaceBtwSections),
-                      const LoginFormWidget(),
-                    ],
-                  ),
-                ),
+                    ),
+                  );
+                },
               ),
             ),
           ],

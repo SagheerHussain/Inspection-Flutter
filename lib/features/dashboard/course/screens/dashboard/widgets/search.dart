@@ -53,7 +53,7 @@ class DashboardSearchBox extends StatelessWidget {
           if (query.isNotEmpty) {
             // Clear search field as requested when navigating to results screen
             controller.clearSearch();
-            Get.to(() => SchedulesScreen(searchQuery: query));
+            Get.to(() => SchedulesScreen(searchQuery: query, statusFilter: 'GLOBAL'));
           }
         },
       ),

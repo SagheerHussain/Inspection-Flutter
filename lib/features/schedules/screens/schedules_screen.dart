@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../data/services/offline/offline_sync_service.dart';
 import '../../../utils/constants/colors.dart';
 import '../../../utils/helpers/helper_functions.dart';
 import '../../../utils/constants/inspection_statuses.dart';
@@ -11,6 +12,7 @@ import '../../car_details/screens/car_details_screen.dart';
 import '../../inspection_form/screens/inspection_form_screen.dart';
 import '../controllers/schedule_controller.dart';
 import '../models/schedule_model.dart';
+import '../widgets/sync_progress_badge.dart';
 import '../../dashboard/course/screens/dashboard/coursesDashboard.dart';
 
 class SchedulesScreen extends StatefulWidget {
@@ -58,11 +60,26 @@ class _SchedulesScreenState extends State<SchedulesScreen> {
 
   void _onSearchChanged(String query) {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
-    _debounce = Timer(const Duration(milliseconds: 500), () {
+    _debounce = Timer(const Duration(milliseconds: 150), () {
+      final q = query.trim().toLowerCase();
       controller.searchQuery.value = query;
+      // Reset list state
+      controller.schedules.clear();
+      controller.hasMoreData.value = false;
+
+      if (q.isEmpty) {
+        // Empty search → go back to normal paginated view
+        controller.hasMoreData.value = true;
+        controller.fetchSchedules();
+        return;
+      }
+
+      // ⚡ Instant search — triggers _searchFromCache which is synchronous
+      // on the in-memory cache (zero network calls once cache is warmed)
       controller.fetchSchedules();
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -95,6 +112,56 @@ class _SchedulesScreenState extends State<SchedulesScreen> {
           ],
         ),
         actions: [
+          // ── Online/Offline pill ── Use IntrinsicWidth to prevent unbounded expansion
+          Obx(() {
+            bool online = true;
+            try {
+              online = OfflineSyncService.instance.isOnline;
+            } catch (_) {}
+            final Color c =
+                online ? const Color(0xFF10B981) : const Color(0xFFF59E0B);
+            return IntrinsicWidth(
+              child: Container(
+                margin: const EdgeInsets.only(right: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: c.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: c.withValues(alpha: 0.3), width: 0.5),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: c,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: c.withValues(alpha: 0.5),
+                            blurRadius: 4,
+                            spreadRadius: 1,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      online ? 'Online' : 'Offline',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: c,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
           Container(
             margin: const EdgeInsets.only(right: 16),
             decoration: BoxDecoration(
@@ -421,6 +488,16 @@ class _ScheduleCard extends StatelessWidget {
                   ),
 
                 const Spacer(),
+
+                // ── Sync Progress Badge (constrained to prevent row overflow) ──
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 120),
+                  child: SyncProgressBadge(
+                    appointmentId: schedule.appointmentId,
+                    dark: dark,
+                  ),
+                ),
+                const SizedBox(width: 6),
 
                 // Status badge
                 Container(

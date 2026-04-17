@@ -182,8 +182,6 @@ class CarModel {
   final String electricals; // removed
   final String rearWiperWasher; // changed to rearWiperWasherDropdownList
   final String rearDefogger; // changed to rearDefoggerDropdownList
-  final String
-  musicSystem; // removed and merged into infotainmentSystemDropdownList
   final String stereo; // removed and merged into infotainmentSystemDropdownList
   final String inbuiltSpeaker;
   final String externalSpeaker;
@@ -603,7 +601,6 @@ class CarModel {
     required this.electricals,
     required this.rearWiperWasher,
     required this.rearDefogger,
-    required this.musicSystem,
     required this.stereo,
     required this.inbuiltSpeaker,
     required this.externalSpeaker,
@@ -1018,7 +1015,6 @@ class CarModel {
       electricals: json["electricals"] ?? 'N/A',
       rearWiperWasher: json["rearWiperWasher"] ?? 'N/A',
       rearDefogger: json["rearDefogger"] ?? 'N/A',
-      musicSystem: json["musicSystem"] ?? 'N/A',
       stereo: json["stereo"] ?? 'N/A',
       inbuiltSpeaker: json["inbuiltSpeaker"] ?? 'N/A',
       externalSpeaker: json["externalSpeaker"] ?? 'N/A',
@@ -1593,7 +1589,6 @@ class CarModel {
     "electricals": electricals,
     "rearWiperWasher": rearWiperWasher,
     "rearDefogger": rearDefogger,
-    "musicSystem": musicSystem,
     "stereo": stereo,
     "inbuiltSpeaker": inbuiltSpeaker,
     "externalSpeaker": externalSpeaker,

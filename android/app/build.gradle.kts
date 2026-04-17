@@ -15,18 +15,18 @@ android {
     val keystoreProperties = Properties()
     val keystorePropertiesFile = rootProject.file("key.properties")
 
-    if (!keystorePropertiesFile.exists()) {
-        throw GradleException("❌ key.properties file not found! Please create it for release signing.")
+    if (keystorePropertiesFile.exists()) {
+        keystoreProperties.load(FileInputStream(keystorePropertiesFile))
     }
 
-    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
-
     signingConfigs {
-        create("release") {
-            keyAlias = keystoreProperties["keyAlias"] as String
-            keyPassword = keystoreProperties["keyPassword"] as String
-            storeFile = file(keystoreProperties["storeFile"] as String)
-            storePassword = keystoreProperties["storePassword"] as String
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
         }
     }
 
@@ -49,12 +49,16 @@ android {
     }
 
     buildTypes {
-    getByName("release") {
-        isMinifyEnabled = false
-        isShrinkResources = false
-        signingConfig = signingConfigs.getByName("release")
+        getByName("release") {
+            isMinifyEnabled = false
+            isShrinkResources = false
+            if (keystorePropertiesFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
+            }
+        }
     }
-}
 }
 
 flutter {

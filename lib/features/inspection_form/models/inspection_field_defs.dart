@@ -778,12 +778,7 @@ class InspectionFieldDefs {
           'Comments on Electricals',
           optional: true,
         ),
-        F.multi('musicSystem', 'Music System', [
-          'Working',
-          'Not Working',
-          'Not Available',
-          'N/A',
-        ]),
+
         F.drop('inbuiltSpeaker', 'Inbuilt Speaker', [
           'OK',
           'Not Working',

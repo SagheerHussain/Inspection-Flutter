@@ -53,12 +53,20 @@ class ApiConstants {
   static String get inspectionEngineerSchedulesUrl =>
       '${baseUrl}inspection/telecallings/get-list-by-inspection-engineer';
 
-  /// Paginated telecalling endpoint with limit & pageNumber query params
+  /// Paginated telecalling endpoint with limit & pageNumber query params.
+  /// Pass [search] to add a server-side search query param.
   static String inspectionEngineerSchedulesPaginatedUrl({
     int limit = 20,
     int pageNumber = 1,
-  }) =>
-      '${baseUrl}inspection/telecallings/get-list-by-inspection-engineer?limit=$limit&pageNumber=$pageNumber';
+    String? search,
+  }) {
+    final base =
+        '${baseUrl}inspection/telecallings/get-list-by-inspection-engineer?limit=$limit&pageNumber=$pageNumber';
+    if (search != null && search.isNotEmpty) {
+      return '$base&search=${Uri.encodeQueryComponent(search)}';
+    }
+    return base;
+  }
 
   static String get updateTelecallingUrl =>
       '${baseUrl}inspection/telecallings/update';

@@ -134,7 +134,6 @@ class CarDetailsModel {
   final String electricals;
   final String rearWiperWasher;
   final String rearDefogger;
-  final String musicSystem;
   final String stereo;
   final String inbuiltSpeaker;
   final String externalSpeaker;
@@ -371,7 +370,6 @@ class CarDetailsModel {
     required this.electricals,
     required this.rearWiperWasher,
     required this.rearDefogger,
-    required this.musicSystem,
     required this.stereo,
     required this.inbuiltSpeaker,
     required this.externalSpeaker,
@@ -604,7 +602,6 @@ class CarDetailsModel {
       electricals: json['electricals'] ?? '',
       rearWiperWasher: json['rearWiperWasher'] ?? '',
       rearDefogger: json['rearDefogger'] ?? '',
-      musicSystem: json['musicSystem'] ?? '',
       stereo: json['stereo'] ?? '',
       inbuiltSpeaker: json['inbuiltSpeaker'] ?? '',
       externalSpeaker: json['externalSpeaker'] ?? '',
@@ -819,11 +816,8 @@ class CarDetailsModel {
 
     // Priority 4: Airbag mapping
     final airbagMapping = {
-      'driverAirbagImages': 0,
       'airbagImages': 0,
-      'airbagImages0': 0,
       'coDriverAirbagImages': 1,
-      'airbagImages1': 1,
       'driverSeatAirbagImages': 2, 'airbagImages2': 2,
       'coDriverSeatAirbagImages': 3, 'airbagImages3': 3,
       'rhsCurtainAirbagImages': 4, 'airbagImages4': 4,

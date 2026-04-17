@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
@@ -12,6 +13,7 @@ import '../../../features/authentication/controllers/login_controller.dart';
 import '../../../features/authentication/screens/login/login_screen.dart';
 import '../../../features/authentication/screens/signup/verify_email.dart';
 import '../../../features/dashboard/course/screens/dashboard/coursesDashboard.dart';
+import '../../../features/dashboard/course/controllers/dashboard_stats_controller.dart';
 import '../../../personalization/controllers/user_controller.dart';
 import '../../../utils/exceptions/firebase_auth_exceptions.dart';
 import '../../../utils/exceptions/firebase_exceptions.dart';
@@ -97,6 +99,8 @@ class AuthenticationRepository extends GetxController {
           idTokenResult.claims?['admin'] == true) {
         // Initialize User Specific Storage
         await TLocalStorage.init(user.uid);
+        // Kick off dashboard stats fetch now that user is confirmed ready
+        unawaited(DashboardStatsController.instance.kickStart());
         Get.offAll(() => const CoursesDashboard());
       } else {
         Get.offAll(() => VerifyEmailScreen(email: getUserEmail));
@@ -115,6 +119,8 @@ class AuthenticationRepository extends GetxController {
         await NotificationService.instance.login(userId);
       }
 
+      // Kick off dashboard stats fetch now that user is confirmed ready
+      unawaited(DashboardStatsController.instance.kickStart());
       Get.offAll(() => const CoursesDashboard());
     } else {
       Get.offAll(() => const LoginScreen());

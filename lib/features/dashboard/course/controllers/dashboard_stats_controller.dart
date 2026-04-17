@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
+import 'package:get_storage/get_storage.dart';
 
 import '../../../../data/services/api/api_service.dart';
 import '../../../../utils/constants/api_constants.dart';
@@ -47,9 +49,13 @@ class DashboardStatsController extends GetxController {
   DateTime? _nextReScheduledTime; // Specific for quick link
   DateTime? _nextRunningTime; // For running banner
 
+  // ── Cache keys (GetStorage) ──
+  static const _cacheKey = 'dashboard_counts_cache';
+  final _storage = GetStorage();
+
   @override
   void onInit() {
-    fetchAllRecords();
+    _restoreFromCache(); // ⚡ Instant — shows last known counts from disk immediately
     super.onInit();
   }
 
@@ -58,6 +64,46 @@ class DashboardStatsController extends GetxController {
     _countdownTimer?.cancel();
     super.onClose();
   }
+
+  // ─── ⚡ Stale-While-Revalidate Cache ────────────────────────────────────────
+
+  /// Instantly restore last known counts from disk — runs before any API call.
+  /// This is why counts were 0 on first render: nothing was cached. After the
+  /// first successful fetch, subsequent logins show real numbers immediately.
+  void _restoreFromCache() {
+    final raw = _storage.read(_cacheKey);
+    if (raw == null || raw is! Map) return;
+
+    scheduledCount.value   = raw['Scheduled']    ?? 0;
+    runningCount.value     = raw['Running']       ?? 0;
+    inspectedCount.value   = raw['Inspected']     ?? 0;
+    canceledCount.value    = raw['Cancelled']     ?? 0;
+    reScheduledCount.value = raw['Re-Scheduled']  ?? 0;
+    reInspectionCount.value = raw['Re-Inspection'] ?? 0;
+
+    debugPrint('⚡ [Dashboard] Restored counts from cache: Scheduled=${raw['Scheduled']}, '
+        'Running=${raw['Running']}, Inspected=${raw['Inspected']}');
+  }
+
+  /// Write current counts to disk after a successful fetch.
+  void _persistToCache() {
+    _storage.write(_cacheKey, {
+      'Scheduled':    scheduledCount.value,
+      'Running':      runningCount.value,
+      'Inspected':    inspectedCount.value,
+      'Cancelled':    canceledCount.value,
+      'Re-Scheduled': reScheduledCount.value,
+      'Re-Inspection': reInspectionCount.value,
+    });
+  }
+
+  /// Called by screenRedirect() after user is confirmed loaded.
+  /// This is the guaranteed-safe point to fetch: UserController is ready,
+  /// the user is authenticated, and we're about to open the dashboard.
+  Future<void> kickStart() async {
+    await fetchAllRecords();
+  }
+  // ──────────────────────────────────────────────────────────────────────────
 
   Future<void> fetchAllRecords() async {
     try {
@@ -125,7 +171,11 @@ class DashboardStatsController extends GetxController {
       reScheduledCount.value = totals['Re-Scheduled'] ?? 0;
       reInspectionCount.value = totals['Re-Inspection'] ?? 0;
 
+      // Persist fresh counts so next login shows real numbers instantly
+      _persistToCache();
+
       _startCountdown();
+
     } catch (e) {
       // debugPrint('❌ Dashboard stats fetch error: $e');
     } finally {

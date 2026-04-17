@@ -20,8 +20,11 @@ class CoursesDashboard extends StatelessWidget {
   Widget build(BuildContext context) {
     final txtTheme = Theme.of(context).textTheme;
     final dark = THelperFunctions.isDarkMode(context);
-    // Initialize required controllers
-    Get.put(DashboardStatsController());
+    // Controller is registered permanently in GeneralBindings — just find it
+    if (!Get.isRegistered<DashboardStatsController>()) {
+      Get.put(DashboardStatsController(), permanent: true);
+    }
+
     if (!Get.isRegistered<UserController>()) Get.put(UserController());
 
     return AnnotatedRegion<SystemUiOverlayStyle>(

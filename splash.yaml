@@ -8,31 +8,11 @@
 # flutter clean
 # flutter pub get
 flutter_native_splash:
-  # Background color for the splash screen
   color: "#FFFFFF"
-  
-  # Background color for the splash screen in dark mode
-  color_dark: "#272727"
-  
-  # Image asset for the splash screen
-  image: assets/images/profile/logo.png
-  
-  # Image asset for the splash screen in dark mode
-  image_dark: assets/images/profile/logo.png
+  color_dark: "#0A0E21"
 
-  # Configuration for Android 12 splash screen
   android_12:
-    # Background color for the splash screen on Android 12
     color: "#FFFFFF"
-    
-    # Background color for the splash screen in dark mode on Android 12
-    color_dark: "#272727"
-    
-    # Image asset for the splash screen on Android 12
-    image: assets/images/profile/logo.png
-    
-    # Image asset for the splash screen in dark mode on Android 12
-    image_dark: assets/images/profile/logo.png
+    color_dark: "#0A0E21"
 
-  # Disable splash screen on the web platform
   web: true

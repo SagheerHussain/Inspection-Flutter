@@ -2,14 +2,18 @@ import 'dart:io';
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:gal/gal.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:video_compress/video_compress.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import '../../../data/services/api/api_service.dart';
+import '../../../data/services/offline/offline_sync_service.dart';
+import '../../../data/services/offline/inspection_offload_service.dart';
 import '../../../utils/constants/api_constants.dart';
 import '../../../utils/popups/exports.dart';
 import '../models/inspection_field_defs.dart';
@@ -82,6 +86,9 @@ class InspectionFormController extends GetxController {
   final targetFieldKey = RxnString();
   final _storage = GetStorage();
   final _picker = ImagePicker();
+
+  /// Shorthand for the global offline sync service
+  OfflineSyncService get _syncService => OfflineSyncService.instance;
 
   // ── User-edited field tracking ──
   // Tracks which field keys the user has explicitly changed during this session.
@@ -163,7 +170,7 @@ class InspectionFormController extends GetxController {
     ) {
       final hasInternet = results.any((r) => r != ConnectivityResult.none);
       if (hasInternet) {
-        retryFailedUploads();
+
         retryPendingDeletions(); // NEW: Also retry any offline deletions
       }
     });
@@ -269,6 +276,7 @@ class InspectionFormController extends GetxController {
         // Wait a tiny bit for UI widgets to mount before syncing schedule
         Future.delayed(const Duration(milliseconds: 300), () {
           _syncScheduleWithChanges();
+          _refreshSyncState(); // Update progress bar from restored snapshot
         });
 
         isLoading.value = false;
@@ -708,27 +716,40 @@ class InspectionFormController extends GetxController {
       imageFiles['rearBumperImages'] = rbMain;
     }
 
-    // lhsQuarterPanelImages — always populate from DB if available
-    final lhsQPWithDoor = extractUrls(
-      carData['lhsQuarterPanelWithRearDoorOpenImages'],
-    );
-    if (lhsQPWithDoor.isNotEmpty)
-      imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = lhsQPWithDoor;
-    final lhsQPMain = extractUrls(carData['lhsQuarterPanelImages']);
-    if (lhsQPMain.isNotEmpty) {
-      imageFiles['lhsQuarterPanelImages'] = lhsQPMain;
+    // lhsQuarterPanelImages → index 0: Open, index 1: Closed
+    final rawLhsQP = carData['lhsQuarterPanelImages'];
+    final List<String> lhsQPUrls = (rawLhsQP is List)
+        ? rawLhsQP.map((e) => e?.toString() ?? '').toList()
+        : [];
+    if (lhsQPUrls.isNotEmpty && lhsQPUrls[0].isNotEmpty && lhsQPUrls[0].startsWith('http')) {
+      imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = [lhsQPUrls[0]];
     }
+    if (lhsQPUrls.length > 1 && lhsQPUrls[1].isNotEmpty && lhsQPUrls[1].startsWith('http')) {
+      imageFiles['lhsQuarterPanelWithRearDoorClosedImages'] = [lhsQPUrls[1]];
+    }
+    // Fallback if backend returned explicit flat keys
+    final fallBackLhsOpen = extractUrls(carData['lhsQuarterPanelWithRearDoorOpenImages']);
+    if (fallBackLhsOpen.isNotEmpty) imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = fallBackLhsOpen;
+    final fallBackLhsClosed = extractUrls(carData['lhsQuarterPanelWithRearDoorClosedImages']);
+    if (fallBackLhsClosed.isNotEmpty) imageFiles['lhsQuarterPanelWithRearDoorClosedImages'] = fallBackLhsClosed;
 
-    // rhsQuarterPanelImages — always populate from DB if available
-    final rhsQPWithDoor = extractUrls(
-      carData['rhsQuarterPanelWithRearDoorOpenImages'],
-    );
-    if (rhsQPWithDoor.isNotEmpty)
-      imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = rhsQPWithDoor;
-    final rhsQPMain = extractUrls(carData['rhsQuarterPanelImages']);
-    if (rhsQPMain.isNotEmpty) {
-      imageFiles['rhsQuarterPanelImages'] = rhsQPMain;
+    // rhsQuarterPanelImages → index 0: Open, index 1: Closed
+    final rawRhsQP = carData['rhsQuarterPanelImages'];
+    final List<String> rhsQPUrls = (rawRhsQP is List)
+        ? rawRhsQP.map((e) => e?.toString() ?? '').toList()
+        : [];
+    if (rhsQPUrls.isNotEmpty && rhsQPUrls[0].isNotEmpty && rhsQPUrls[0].startsWith('http')) {
+      imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = [rhsQPUrls[0]];
     }
+    if (rhsQPUrls.length > 1 && rhsQPUrls[1].isNotEmpty && rhsQPUrls[1].startsWith('http')) {
+      imageFiles['rhsQuarterPanelWithRearDoorClosedImages'] = [rhsQPUrls[1]];
+    }
+    // Fallback if backend returned explicit flat keys
+    final fallBackRhsOpen = extractUrls(carData['rhsQuarterPanelWithRearDoorOpenImages']);
+    if (fallBackRhsOpen.isNotEmpty) imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = fallBackRhsOpen;
+    final fallBackRhsClosed = extractUrls(carData['rhsQuarterPanelWithRearDoorClosedImages']);
+    if (fallBackRhsClosed.isNotEmpty) imageFiles['rhsQuarterPanelWithRearDoorClosedImages'] = fallBackRhsClosed;
+
 
     // apronLhsRhs → lhsApronImages + rhsApronImages
     final apronAll = extractUrls(carData['apronLhsRhs']);
@@ -761,9 +782,11 @@ class InspectionFormController extends GetxController {
     }
 
     // airbagimages array → individual airbag image fields
-    final airbagUrls = extractUrls(
-      carData['airbagImages'] ?? carData['airbagimages'] ?? carData['airbags'],
-    );
+    final rawAirbagUrls = carData['airbagImages'] ?? carData['airbagimages'] ?? carData['airbags'];
+    final List<String> airbagUrls = (rawAirbagUrls is List)
+        ? rawAirbagUrls.map((e) => e?.toString() ?? '').toList()
+        : [];
+    
     final airbagKeys = [
       'driverAirbagImages',
       'coDriverAirbagImages',
@@ -777,10 +800,13 @@ class InspectionFormController extends GetxController {
       'lhsRearSideAirbagImages',
     ];
     for (int i = 0; i < airbagUrls.length && i < airbagKeys.length; i++) {
-      if (airbagUrls[i].isNotEmpty) {
-        imageFiles[airbagKeys[i]] = [airbagUrls[i]];
+      final url = airbagUrls[i];
+      if (url.startsWith('http')) {
+        imageFiles[airbagKeys[i]] = [url];
+        carData[airbagKeys[i]] = [url];
       }
     }
+
     // Also check individual airbag image keys from new API format
     for (final key in airbagKeys) {
       final urls = extractUrls(carData[key]);
@@ -1053,6 +1079,31 @@ class InspectionFormController extends GetxController {
     await _storage.remove(_snapshotLockedFieldsKey);
     await _storage.remove(_snapshotOriginalDataKey);
     await _storage.remove(_snapshotCarIdKey);
+
+    // Clear sync tracker state for this appointment
+    _syncService.clearState(appointmentId);
+  }
+
+  /// Recalculates and pushes the current total/uploaded counts to OfflineSyncService.
+  /// Called after snapshot restore so the schedule card progress bar is accurate.
+  void _refreshSyncState() {
+    int total = 0;
+    int uploaded = 0;
+
+    imageFiles.forEach((key, paths) {
+      for (final path in paths) {
+        total++;
+        if (isMediaUploaded(path)) uploaded++;
+      }
+    });
+
+    if (total > 0) {
+      _syncService.updateSyncState(
+        appointmentId,
+        total: total,
+        uploaded: uploaded,
+      );
+    }
   }
 
   /// Helper to restore mediaCloudinaryData from JSON-compatible Map
@@ -1187,7 +1238,8 @@ class InspectionFormController extends GetxController {
           imageFiles.refresh();
 
           // Trigger Upload with Edited File
-          _uploadMedia(key, editedPath, isVideo: false);
+          // Uploading is now handled by the background queue upon submission.
+          // We only save the path locally for the offline queue.
 
           // Save to Gallery if captured from Camera
           if (source == ImageSource.camera) {
@@ -1254,7 +1306,8 @@ class InspectionFormController extends GetxController {
         imageFiles.refresh();
 
         // Trigger Upload (Compression starts inside _uploadMedia)
-        _uploadMedia(key, picked.path, isVideo: true);
+        // Uploading is now handled by the background queue upon submission.
+        // We only save the path locally for the offline queue.
 
         // Save to Gallery if captured from Camera
         if (source == ImageSource.camera) {
@@ -1309,7 +1362,8 @@ class InspectionFormController extends GetxController {
 
         // Trigger Uploads
         for (final path in toAdd) {
-          _uploadMedia(key, path, isVideo: false);
+          // Uploading is now handled by the background queue upon submission.
+          // We only save the path locally for the offline queue.
         }
 
         if (picked.length > remaining) {
@@ -1348,19 +1402,10 @@ class InspectionFormController extends GetxController {
       // );
 
       // Trigger Delete from Cloudinary
-      final data = mediaCloudinaryData[path];
-      if (data != null && data['publicId'] != null) {
-        final isVideo = field?.type == FType.video;
-        _deleteMedia(
-          data['publicId']!,
-          isVideo: isVideo,
-          localInfo: '[$label] $fileName',
-        );
-      } else {
-        // debugPrint(
-        // 'ℹ️ Note: No remote delete called. This image was likely not uploaded yet or failed upload.',
-        // );
-      }
+      // NOTE: We no longer delete from Cloudinary synchronously here because
+      // uploading/deleting is now handled offline-first by the background queue.
+      // If the media was never uploaded (since we don't upload on pick anymore),
+      // there's nothing to delete remotely anyway.
 
       currentList.removeAt(index);
       mediaCloudinaryData.remove(path);
@@ -1373,133 +1418,9 @@ class InspectionFormController extends GetxController {
     }
   }
 
-  // ─── Cloudinary API Helpers ───
-  Future<void> _uploadMedia(
-    String fieldKey,
-    String localPath, {
-    required bool isVideo,
-  }) async {
-    // Avoid re-uploading if already in progress or already successful
-    if (localPath.startsWith('http') ||
-        _currentlyUploading.contains(localPath) ||
-        isMediaUploaded(localPath)) {
-      return;
-    }
 
-    _currentlyUploading.add(localPath);
-    try {
-      // debugPrint(
-      // '⬆️ [START] Uploading ${isVideo ? 'video' : 'image'} to Cloudinary...',
-      // );
-      // debugPrint('📍 Local Path: $localPath');
 
-      String finalPath = localPath;
 
-      if (isVideo) {
-        TLoaders.customToast(message: 'Compressing video...');
-        final compressedPath = await _compressVideo(localPath);
-        if (compressedPath == null) {
-          // debugPrint('❌ Video compression failed or was cancelled.');
-          return;
-        }
-
-        // Check size limit: 10MB = 10 * 1024 * 1024 bytes
-        final file = File(compressedPath);
-        final size = await file.length();
-        if (size > 10 * 1024 * 1024) {
-          TLoaders.errorSnackBar(
-            title: 'Video Too Large',
-            message: 'Compressed video exceeds 10MB limit.',
-          );
-          return;
-        }
-        finalPath = compressedPath;
-      }
-
-      final url =
-          isVideo ? ApiConstants.uploadVideoUrl : ApiConstants.uploadImagesUrl;
-      final fileKey = isVideo ? 'video' : 'imagesList';
-
-      final file = await http.MultipartFile.fromPath(fileKey, finalPath);
-
-      final response = await ApiService.multipartPost(
-        url: url,
-        fields: {'appointmentId': appointmentId},
-        files: [file],
-      );
-
-      // Print full API response for transparency
-      // debugPrint('📦 API RESPONSE (Upload - $fieldKey): $response');
-
-      final resultData = response['data'] ?? response;
-      String? returnedUrl;
-      String? publicId;
-
-      // Check if files list exists (for image uploads)
-      if (resultData['files'] is List &&
-          (resultData['files'] as List).isNotEmpty) {
-        final firstFile = resultData['files'][0];
-        returnedUrl = firstFile['url']?.toString();
-        publicId =
-            (firstFile['publicId'] ?? firstFile['public_id'])?.toString();
-      } else {
-        // Fallback for direct fields (common in video uploads)
-        // Check multiple possible URL keys: originalUrl, optimizedUrl, url
-        returnedUrl =
-            (resultData['originalUrl'] ??
-                    resultData['optimizedUrl'] ??
-                    resultData['url'])
-                ?.toString();
-        publicId =
-            (resultData['publicId'] ?? resultData['public_id'])?.toString();
-      }
-
-      if (returnedUrl != null) {
-        // debugPrint('🌐 SUCCESS: File available at: $returnedUrl');
-        if (publicId != null) {
-          // debugPrint('🔑 PublicID stored for deletion: $publicId');
-          mediaCloudinaryData[localPath] = {
-            'url': returnedUrl,
-            'publicId': publicId,
-          };
-          // NEW: Persist metadata success immediately so re-opens don't trigger re-upload
-          _saveSnapshot();
-        } else {
-          // debugPrint(
-          // '⚠️ WARNING: No publicId found in response. Remote deletion will not work for this file.',
-          // );
-        }
-      } else {
-        // debugPrint(
-        // '❌ ERROR: Upload response did not contain a URL or files list.',
-        // );
-      }
-    } catch (e) {
-      // debugPrint('❌ FATAL: Upload failed for $localPath: $e');
-    } finally {
-      _currentlyUploading.remove(localPath);
-      // Refresh UI if needed (thumbnails might be watching isMediaUploaded)
-      mediaCloudinaryData.refresh();
-    }
-  }
-
-  /// Iterates through all image fields and triggers upload for any local files
-  /// that don't have a successful server URL yet.
-  void retryFailedUploads() {
-    // Avoid triggering retries while the form is still loading its initial snapshot/API data
-    if (isLoading.value) return;
-
-    // debugPrint('📡 Connectivity change detected: Triggering retry for failed uploads...');
-    imageFiles.forEach((key, paths) {
-      final field = _findFieldByKey(key);
-      final isVideo = field?.type == FType.video;
-
-      for (final path in paths) {
-        // _uploadMedia performs its own guard checks
-        _uploadMedia(key, path, isVideo: isVideo);
-      }
-    });
-  }
 
   Future<String?> _compressVideo(String videoPath) async {
     try {
@@ -1758,18 +1679,6 @@ class InspectionFormController extends GetxController {
         final count = paths.length;
         if (count < field.minImages) {
           unFilled.add(field.label);
-        } else {
-          // NEW: Validate that all attached images are actually uploaded to server
-          bool allUploaded = true;
-          for (final path in paths) {
-            if (!isMediaUploaded(path)) {
-              allUploaded = false;
-              break;
-            }
-          }
-          if (!allUploaded) {
-            unFilled.add("${field.label} (Uploading...)");
-          }
         }
       } else {
         // Standard field check
@@ -1959,21 +1868,6 @@ class InspectionFormController extends GetxController {
               'key': field.key,
               'label': label,
             });
-          } else {
-            // NEW: Ensure all captured images for required fields are successfully uploaded
-            bool allUploaded = true;
-            for (final path in paths) {
-              if (!isMediaUploaded(path)) {
-                allUploaded = false;
-                break;
-              }
-            }
-            if (!allUploaded) {
-              missingBySection.putIfAbsent(section.title, () => []).add({
-                'key': field.key,
-                'label': '${field.label} (Still uploading...)',
-              });
-            }
           }
         } else {
           final val = getFieldValue(field.key);
@@ -2182,229 +2076,208 @@ class InspectionFormController extends GetxController {
       return;
     }
 
-    // ══════════════════════════════════════════════════════════
-    // STANDARD FLOW: Build CarModel, print debug, then submit to API
-    // Check if record already exists — UPDATE instead of ADD
+    // OFFLOAD FLOW: Queue for background sync (upload media + submit API)
     // ══════════════════════════════════════════════════════════
     isSubmitting.value = true;
     try {
-      // 1. Dump date field values for debugging
-      final dateKeys = [
-        'registrationDate',
-        'fitnessValidity',
-        'yearMonthOfManufacture',
-        'taxValidTill',
-        'insuranceValidity',
-        'pucValidity',
-      ];
-      // debugPrint('═══════════════════════════════════════════════');
-      // debugPrint('📅 DATE FIELD VALUES BEFORE BUILD:');
-      for (final k in dateKeys) {
-        final v = data.data[k];
-        // debugPrint('  $k = ${v == null ? "NULL" : "\"$v\" (${v.runtimeType})"}');
-      }
-      // debugPrint('═══════════════════════════════════════════════');
-
-      // 2. Build the CarModel from form data
+      // 1. Build CarModel payload (same as before)
       final carModel = _buildCarModelFromForm(data);
-
-      // 2. Print all fields to debug console for verification
-      _printCarModelDebug(carModel);
-
-      // 3. Convert CarModel to JSON payload
       final payload = carModel.toJson();
 
-      // 🔍 DEBUG: Trace odometer and bootDoorImages through the pipeline
-      // debugPrint('═══════════════════════════════════════════════');
-      // debugPrint('🔍 ODOMETER DEBUG:');
-      // debugPrint('  imageFiles[odometerReadingAfterTestDriveImages] = ${imageFiles['odometerReadingAfterTestDriveImages']}');
-      // debugPrint('  carModel.odometerReadingAfterTestDriveImages = ${carModel.odometerReadingAfterTestDriveImages}');
-      // debugPrint('  payload[odometerReadingAfterTestDriveImages] = ${payload['odometerReadingAfterTestDriveImages']}');
-      // debugPrint('═══════════════════════════════════════════════');
-
-      // Add image URLs from Cloudinary uploads
+      // 2. Overlay any already-uploaded Cloudinary URLs into the payload
+      //    (preserves work already done if user had uploaded before)
       imageFiles.forEach((key, paths) {
         if (const {
-          'airbagImages',
-          'airbagimages',
-          'lhsQuarterPanelImages',
-          'rhsQuarterPanelImages',
-          'bonnetImages',
-          'frontBumperImages',
+          'airbagImages', 'airbagimages', 'lhsQuarterPanelImages',
+          'rhsQuarterPanelImages', 'bonnetImages', 'frontBumperImages',
           'rearBumperImages',
         }.contains(key)) return;
 
         if (paths.isNotEmpty) {
-          final resolvedUrls =
-              paths
-                  .map((p) {
-                    final url = mediaCloudinaryData[p]?['url'] ?? p;
-                    return url.startsWith('http') ? url : '';
-                  })
-                  .where((item) => item.isNotEmpty)
-                  .toList();
+          final resolvedUrls = paths
+              .map((p) {
+                final url = mediaCloudinaryData[p]?['url'] ?? p;
+                return url.startsWith('http') ? url : p; // keep local if not yet uploaded
+              })
+              .toList();
           payload[key] = resolvedUrls;
         }
       });
 
-      // 🔍 DEBUG: bootDoorImages after imageFiles overlay
-      // debugPrint('🔍 payload[airbagimages] (after overlay) = ${payload['airbagimages']}');
-
-      // Ensure status is set to Inspected in the Car collection
+      // 3. Set final inspection status fields
       payload['status'] = 'Inspected';
       payload['inspectionStatus'] = 'Inspected';
       payload['auctionStatus'] = 'inspected';
-
       final nowUtcIso = DateTime.now().toUtc().toIso8601String();
       payload['timestamp'] = nowUtcIso;
       payload['inspectionDate'] = nowUtcIso;
       payload['sendToAuctionApk'] = nowUtcIso;
 
-      // Debug: dump date values in payload
-      // debugPrint('📅 DATE VALUES IN PAYLOAD:');
-      for (final k in [
-        'registrationDate',
-        'fitnessTill',
-        'yearMonthOfManufacture',
-        'taxValidTill',
-        'insuranceValidity',
-        'pucValidity',
-        'fitnessValidity',
-        'yearAndMonthOfManufacture',
-      ]) {
-        // debugPrint('  payload[$k] = ${payload[k]}');
-      }
-
-      // ── Check if a car record already exists for this appointmentId ──
+      // 4. Check for existing car record (UPDATE vs ADD) if online
       String? existingCarId;
-      try {
-        // debugPrint('🔍 Checking if car record already exists for appointmentId: $appointmentId');
-        final existingResponse = await ApiService.get(
-          ApiConstants.carDetailsUrl(appointmentId),
-        );
-        final existingCar = existingResponse['carDetails'];
-        if (existingCar != null && existingCar['_id'] != null) {
-          existingCarId = existingCar['_id'].toString();
-          // debugPrint('✅ Existing car record found: $existingCarId — will UPDATE instead of ADD');
-        }
-      } catch (e) {
-        // debugPrint('ℹ️ No existing car record found (or check failed): $e — will ADD new record');
+      if (_syncService.isOnline) {
+        try {
+          final existingResponse = await ApiService.get(
+            ApiConstants.carDetailsUrl(appointmentId),
+          );
+          final existingCar = existingResponse['carDetails'];
+          if (existingCar != null && existingCar['_id'] != null) {
+            existingCarId = existingCar['_id'].toString();
+          }
+        } catch (_) {}
       }
 
-      Map<String, dynamic> response;
-
-      if (existingCarId != null) {
-        // ── UPDATE existing record ──
-        payload['carId'] = existingCarId;
-        // Keep _id for the update API
-        payload.remove('objectId');
-
-        // debugPrint('📡 Updating existing car record via PUT...');
-        // debugPrint('📦 Payload keys: ${payload.keys.toList()}');
-        // debugPrint('🌐 URL: ${ApiConstants.carUpdateUrl}');
-        // debugPrint('🔑 carId: $existingCarId');
-
-        response = await ApiService.put(ApiConstants.carUpdateUrl, payload);
-      } else {
-        // ── ADD new record ──
-        payload.remove('_id');
-        payload.remove('id');
-        payload.remove('objectId');
-        // debugPrint(
-        // '🔑 Payload after ID removal — _id: ${payload.containsKey('_id')}, id: ${payload.containsKey('id')}, objectId: ${payload.containsKey('objectId')}',
-        // );
-
-        // debugPrint('📡 Submitting new inspection to API...');
-        // debugPrint('📦 Payload keys: ${payload.keys.toList()}');
-        // debugPrint('🌐 URL: ${ApiConstants.inspectionSubmitUrl}');
-
-        response = await ApiService.post(
-          ApiConstants.inspectionSubmitUrl,
-          payload,
-        );
+      // 5. Build telecalling status body (stored as query string so it serializes simply)
+      String? telecallingBodyJson;
+      if (schedule != null) {
+        final storage = GetStorage();
+        final userId = storage.read('USER_ID')?.toString() ??
+            storage.read('user_id')?.toString() ?? '';
+        final userRole =
+            storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
+        final statusBody = {
+          'telecallingId': schedule!.id,
+          'appointmentId': appointmentId,
+          'changedBy': userId,
+          'source': userRole,
+          'inspectionStatus': 'Inspected',
+          'status': 'Inspected',
+          'remarks': schedule!.remarks ?? '',
+          'version': _appVersion,
+          'inspectionDateTime': nowUtcIso,
+        };
+        // Store as JSON via dart:convert
+        telecallingBodyJson = statusBody.entries
+            .map((e) => '${Uri.encodeQueryComponent(e.key)}=${Uri.encodeQueryComponent(e.value.toString())}')
+            .join('&');
       }
 
-      // debugPrint('✅ API Response: $response');
+      // 6. Build the queue item with LOCAL image file paths
+      final offloadItem = OffloadQueueItem(
+        appointmentId: appointmentId,
+        ownerName: data.data['ownerName']?.toString() ??
+            data.data['customerName']?.toString() ?? '',
+        make: data.data['make']?.toString() ?? '',
+        model: data.data['model']?.toString() ?? '',
+        payload: payload,
+        imageFiles: Map<String, List<String>>.from(
+          imageFiles.map((k, v) => MapEntry(k, List<String>.from(v))),
+        ),
+        carId: existingCarId,
+        telecallingId: schedule?.id,
+        telecallingBody: telecallingBodyJson,
+        // Pre-populate already-uploaded URLs so they don't get re-uploaded
+        resolvedUrls: Map<String, String>.fromEntries(
+          mediaCloudinaryData.entries
+              .where((e) => e.value['url'] != null)
+              .map((e) => MapEntry(e.key, e.value['url']!)),
+        ),
+      );
 
-      // 5. Clear local draft on success
+      // 7. Enqueue for background sync
+      await InspectionOffloadService.instance.enqueue(offloadItem);
+
+      // 8. Clear local draft immediately
       await _clearSnapshot();
 
-      // 6. Update telecalling status to 'Inspected'
-      try {
-        if (schedule != null) {
-          // debugPrint('🔄 Updating telecalling status to Inspected...');
-          // debugPrint('🔑 telecallingId: ${schedule!.id}');
-          // debugPrint('📋 appointmentId: $appointmentId');
-
-          final storage = GetStorage();
-          final userId =
-              storage.read('USER_ID')?.toString() ??
-              storage.read('user_id')?.toString() ??
-              '';
-          final userRole =
-              storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
-
-          final statusBody = {
-            'telecallingId': schedule!.id,
-            'appointmentId': appointmentId,
-            'changedBy': userId,
-            'source': userRole,
-            'inspectionStatus': 'Inspected',
-            'status': 'Inspected',
-            'remarks': schedule!.remarks ?? '',
-            'version': _appVersion,
-            'inspectionDateTime': nowUtcIso,
-          };
-
-          // debugPrint('📡 PUT ${ApiConstants.updateTelecallingUrl}');
-          // debugPrint('📦 Body: $statusBody');
-
-          final statusResponse = await ApiService.put(
-            ApiConstants.updateTelecallingUrl,
-            statusBody,
-          );
-          // debugPrint('✅ Telecalling status updated to Inspected: $statusResponse');
-
-          // Refresh schedule list in background (non-blocking)
-          try {
-            if (Get.isRegistered<ScheduleController>()) {
-              Get.find<ScheduleController>().refreshSchedules();
-            }
-          } catch (_) {}
-        } else {
-          // debugPrint('⚠️ schedule is null — cannot update telecalling status');
-        }
-      } catch (e) {
-        // debugPrint('⚠️ Failed to update telecalling status: $e');
-        // Let user know but don't block success
-        TLoaders.customToast(
-          message: "Car submitted, but failed to update lead status: $e",
-        );
-      }
-
-      // 7. Show stunning success dialog
-      try {
-        TLoaders.hideSnackBar();
-      } catch (_) {}
-      _showSuccessDialog(
-        response['message'] ??
-            (existingCarId != null
-                ? 'Inspection updated successfully!'
-                : 'Inspection submitted successfully!'),
-      );
+      // 9. Show success and navigate back — sync happens in background
+      try { TLoaders.hideSnackBar(); } catch (_) {}
+      _showOffloadQueuedDialog();
     } catch (e) {
-      // debugPrint('❌ Submit error: $e');
-      try {
-        TLoaders.hideSnackBar();
-      } catch (_) {}
+      try { TLoaders.hideSnackBar(); } catch (_) {}
       _showErrorDialog(e.toString());
     } finally {
       isSubmitting.value = false;
     }
   }
 
+  /// Success dialog shown after queueing — user knows it's syncing
+  void _showOffloadQueuedDialog() {
+    Get.dialog(
+      Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Padding(
+          padding: const EdgeInsets.all(28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF6C63FF), Color(0xFF4CAF50)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xFF6C63FF).withValues(alpha: 0.3),
+                      blurRadius: 16,
+                      spreadRadius: 2,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.cloud_upload_rounded,
+                  color: Colors.white,
+                  size: 36,
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Inspection Queued!',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Your inspection is saved locally and is now syncing in the background.\n\nTrack progress in the Off-Loading box on your dashboard.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Get.back(); // Close dialog
+                    Get.until((route) => route.isFirst); // Go to dashboard
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF6C63FF),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    elevation: 0,
+                  ),
+                  child: const Text(
+                    'Go to Dashboard',
+                    style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      barrierDismissible: false,
+    );
+  }
+
   // ─── Re-Inspection Preview Dialog ───
   void _showReInspectionPreviewDialog(InspectionFormModel data) {
+
     // Build the current data map from form
     final currentData = Map<String, dynamic>.from(data.data);
 
@@ -3035,6 +2908,34 @@ class InspectionFormController extends GetxController {
         }
       });
 
+      // Reconstruct composite arrays for backend schema compatibility
+      List<String> getUrls(String key) {
+        final urls = payload[key];
+        if (urls is List) return urls.map((e) => e.toString()).where((u) => u.startsWith('http')).toList();
+        return [];
+      }
+      String getFirstUrl(String key) => getUrls(key).firstOrNull ?? '';
+
+      payload['airbagImages'] = [
+        getFirstUrl('driverAirbagImages'),
+        getFirstUrl('coDriverAirbagImages'),
+        getFirstUrl('driverSeatAirbagImages'),
+        getFirstUrl('coDriverSeatAirbagImages'),
+        getFirstUrl('rhsCurtainAirbagImages'),
+        getFirstUrl('lhsCurtainAirbagImages'),
+        getFirstUrl('driverKneeAirbagImages'),
+        getFirstUrl('coDriverKneeAirbagImages'),
+        getFirstUrl('rhsRearSideAirbagImages'),
+        getFirstUrl('lhsRearSideAirbagImages'),
+      ];
+      payload['bonnetImages'] = [...getUrls('bonnetClosedImages'), ...getUrls('bonnetOpenImages')];
+      payload['frontBumperImages'] = [...getUrls('frontBumperLhs45DegreeImages'), ...getUrls('frontBumperRhs45DegreeImages'), ...getUrls('frontBumperImages')];
+      payload['rearBumperImages'] = [...getUrls('rearBumperLhs45DegreeImages'), ...getUrls('rearBumperRhs45DegreeImages'), ...getUrls('rearBumperImages')];
+      payload['lhsQuarterPanelImages'] = [getFirstUrl('lhsQuarterPanelWithRearDoorOpenImages'), getFirstUrl('lhsQuarterPanelWithRearDoorClosedImages')];
+      payload['rhsQuarterPanelImages'] = [getFirstUrl('rhsQuarterPanelWithRearDoorOpenImages'), getFirstUrl('rhsQuarterPanelWithRearDoorClosedImages')];
+      payload['apronLhsRhs'] = [...getUrls('lhsApronImages'), ...getUrls('rhsApronImages')];
+
+
       // Ensure timestamps represent IST moments converted to UTC
       final nowUtcIso = DateTime.now().toUtc().toIso8601String();
       payload['timestamp'] = nowUtcIso;
@@ -3568,7 +3469,34 @@ class InspectionFormController extends GetxController {
   }
 
   // ─── Temporary Test Fill Feature ───
+
+  /// Copies a Flutter bundled asset to a writable temp file and returns its path.
+  /// This lets test-fill use offline bundled assets as real local file paths.
+  Future<String?> _extractAssetToTemp(String assetPath, String filename) async {
+    try {
+      final byteData = await rootBundle.load(assetPath);
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/$filename');
+      await file.writeAsBytes(byteData.buffer.asUint8List(), flush: true);
+      return file.path;
+    } catch (e) {
+      debugPrint('⚠️ [TestFill] Failed to extract asset $assetPath: $e');
+      return null;
+    }
+  }
+
   void tempTestFill() async {
+    // ── Step 1: Extract bundled test assets to writable temp paths ──
+    final testImagePath = await _extractAssetToTemp(
+      'assets/images/profile/default.webp',
+      'test_fill_image.webp',
+    );
+    final testVideoPath = await _extractAssetToTemp(
+      'assets/images/profile/Default-video.mp4',
+      'test_fill_video.mp4',
+    );
+
+    // ── Step 2: Fill all text / dropdown / date fields ──
     for (final section in InspectionFieldDefs.sections) {
       for (final field in section.fields) {
         if (field.readonly) continue;
@@ -3578,7 +3506,9 @@ class InspectionFormController extends GetxController {
             field.type == FType.dropdown ||
             field.type == FType.searchable ||
             field.type == FType.multiSelect) {
+          
           dynamic value = "test";
+          
           if (field.type == FType.number) {
             value = "10";
             if (field.key == 'ownerSerialNumber') value = "1";
@@ -3586,26 +3516,57 @@ class InspectionFormController extends GetxController {
             if (field.key == 'cubicCapacity') value = "1200";
             if (field.key == 'odometerReadingInKms') value = "50000";
           }
-          if (field.type == FType.dropdown && field.options.isNotEmpty) {
-            value = field.options.first;
+          
+          if (field.type == FType.dropdown || field.type == FType.searchable) {
+            final dynamicOpts = dropdownOptions[field.key] ?? [];
+            if (dynamicOpts.isNotEmpty) {
+              value = dynamicOpts.first;
+            } else if (field.options.isNotEmpty) {
+              value = field.options.first;
+            } else {
+              value = "test";
+            }
           }
-          if (field.type == FType.multiSelect && field.options.isNotEmpty) {
-            value = [field.options.first];
+          
+          if (field.type == FType.multiSelect) {
+            final dynamicOpts = dropdownOptions[field.key] ?? [];
+            if (dynamicOpts.isNotEmpty) {
+              value = [dynamicOpts.first];
+            } else if (field.options.isNotEmpty) {
+              value = [field.options.first];
+            } else {
+              value = ["test"];
+            }
           }
-          if (field.type == FType.searchable) {
-            value = "test";
-          }
+          
           updateField(field.key, value);
         } else if (field.type == FType.date) {
           updateField(field.key, "2024-01-01");
+
+        // ── Step 3: Fill image fields with bundled test image ──
+        } else if (field.type == FType.image && testImagePath != null) {
+          // Fill up to minImages slots (at least 1, at most maxImages)
+          final needed = field.minImages > 0 ? field.minImages : 1;
+          final slots = needed.clamp(1, field.maxImages);
+          final paths = List.generate(slots, (_) => testImagePath);
+          imageFiles[field.key] = paths;
+          imageFiles.refresh();
+
+        // ── Step 4: Fill video fields with bundled test video ──
+        } else if (field.type == FType.video && testVideoPath != null) {
+          imageFiles[field.key] = [testVideoPath];
+          imageFiles.refresh();
         }
       }
     }
-    _saveSnapshot();
+
+    await _saveSnapshot();
     inspectionData.refresh();
+
     TLoaders.successSnackBar(
-      title: 'Test Fill',
-      message: 'Form filled with testing data (Superadmin only).',
+      title: 'Test Fill ✓',
+      message:
+          'Form filled with test data. Images & videos use bundled offline assets.',
     );
   }
 

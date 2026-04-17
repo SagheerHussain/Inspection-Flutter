@@ -34,7 +34,11 @@ class ScheduleController extends GetxController {
 
   int _currentPage = 1;
 
-  /// Update a specific schedule across all controller instances (tags).
+  // ─── 🚀 HIGH-PERFORMANCE SEARCH CACHE ──────────────────────────
+  static final List<ScheduleModel> _universalCache = [];
+  static bool _cacheWarmed = false;
+  static bool _cacheWarming = false;
+  // ───────────────────────────────────────────────────────────────
   static void updateScheduleGlobally(
     String appointmentId, {
     String? make,
@@ -42,6 +46,14 @@ class ScheduleController extends GetxController {
     String? variant,
     String? ownerName,
   }) {
+    // Keep Search Cache synchronized with manual edits
+    final cacheIdx = _universalCache.indexWhere((s) => s.appointmentId == appointmentId);
+    if (cacheIdx != -1) {
+      _universalCache[cacheIdx] = _universalCache[cacheIdx].copyWith(
+        make: make, model: model, variant: variant, ownerName: ownerName,
+      );
+    }
+    
     final tags = [
       'schedule_Running',
       'schedule_Scheduled',
@@ -82,8 +94,7 @@ class ScheduleController extends GetxController {
 
   /// Fetch schedules with server-side pagination.
   /// On initial load: fetches page 1.
-  /// On loadMore: fetches the next page.
-  Future<void> fetchSchedules({bool loadMore = false}) async {
+  Future<void> fetchSchedules({bool loadMore = false, bool isRefresh = false}) async {
     try {
       // ── LOAD MORE (next page) ──
       if (loadMore) {
@@ -94,8 +105,7 @@ class ScheduleController extends GetxController {
         final userEmail = UserController.instance.user.value.email;
 
         if (searchQuery.isNotEmpty) {
-          // Search mode: fetch next page for all statuses and merge
-          await _fetchSearchPage(userEmail);
+          await _searchFromCache(userEmail);
         } else if (statusFilter == 'Upcoming') {
           await _fetchPageForStatus('Scheduled', userEmail);
         } else {
@@ -107,20 +117,25 @@ class ScheduleController extends GetxController {
       }
 
       // ── INITIAL LOAD (page 1) ──
-      isLoading.value = true;
-      schedules.clear();
+      if (!isRefresh) {
+        isLoading.value = true;
+      }
       _currentPage = 1;
       hasMoreData.value = true;
-      totalRecords.value = 0;
+      // Do not clear schedules on refresh to avoid UI flicker
+      if (!isRefresh) {
+        schedules.clear();
+        totalRecords.value = 0;
+      }
 
       final userEmail = UserController.instance.user.value.email;
 
       if (searchQuery.isNotEmpty) {
-        await _fetchSearchPage(userEmail);
+        await _searchFromCache(userEmail);
       } else if (statusFilter == 'Upcoming') {
-        await _fetchPageForStatus('Scheduled', userEmail);
+        await _fetchPageForStatus('Scheduled', userEmail, isRefresh: isRefresh);
       } else {
-        await _fetchPageForStatus(statusFilter, userEmail);
+        await _fetchPageForStatus(statusFilter, userEmail, isRefresh: isRefresh);
       }
     } catch (e) {
       if (!loadMore) {
@@ -139,7 +154,7 @@ class ScheduleController extends GetxController {
   }
 
   /// Fetch a single page for a given status and append results.
-  Future<void> _fetchPageForStatus(String status, String userEmail) async {
+  Future<void> _fetchPageForStatus(String status, String userEmail, {bool isGlobalSearch = false, bool isRefresh = false}) async {
     try {
       final Map<String, dynamic> body = {
         "inspectionStatus": status,
@@ -169,7 +184,13 @@ class ScheduleController extends GetxController {
       // Apply locally saved snapshots to ensure UI shows the latest manual updates
       _applyLocalSnapshots(newRecords);
 
-      schedules.addAll(newRecords);
+      if (_currentPage == 1 && !isRefresh) {
+        schedules.assignAll(newRecords);
+      } else if (isRefresh) {
+        schedules.assignAll(newRecords);
+      } else {
+        schedules.addAll(newRecords);
+      }
 
       // Check if we've loaded all records
       if (schedules.length >= apiTotal || newRecords.isEmpty) {
@@ -180,66 +201,114 @@ class ScheduleController extends GetxController {
     }
   }
 
-  /// Search mode: fetch page for ALL statuses and filter by query.
-  Future<void> _fetchSearchPage(String userEmail) async {
-    final statuses = InspectionStatuses.all;
-    int maxTotal = 0;
+  // ─── 🔥 BACKGROUND CACHE WARMER & IN-MEMORY SEARCH ──────────
+  Future<void> _searchFromCache(String userEmail) async {
+    final query = searchQuery.value.trim().toLowerCase();
+    if (query.isEmpty) return;
 
-    final List<ScheduleModel> pageResults = [];
+    final cached = _filterCache(query);
+    _applyLocalSnapshots(cached);
+    schedules.assignAll(cached);
+    totalRecords.value = cached.length;
+    hasMoreData.value = false;
 
-    await Future.wait(
-      statuses.map((status) async {
-        try {
-          final Map<String, dynamic> body = {
-            "inspectionStatus": status,
-          };
+    if (!_cacheWarmed) {
+      _warmUniversalCache(userEmail, onProgress: () {
+        if (searchQuery.value.trim().toLowerCase() == query) {
+          final fresh = _filterCache(query);
+          _applyLocalSnapshots(fresh);
+          schedules.assignAll(fresh);
+          totalRecords.value = fresh.length;
+        }
+      });
+    }
+  }
 
-          final user = UserController.instance.user.value;
-          if (user.id != 'superadmin') {
-            body["allocatedTo"] = userEmail;
-          }
+  List<ScheduleModel> _filterCache(String q) {
+    if (q.isEmpty) return _universalCache;
+    
+    // Split query by spaces to allow "Google-like" multi-part term matching
+    final queryParts = q.toLowerCase().trim().split(RegExp(r'\s+'));
+    final isExactIdSearch = q.contains('-');
+    
+    return _universalCache.where((r) {
+      // 1. DEDICATED SEARCH FILTER
+      if (statusFilter != 'GLOBAL' && statusFilter.isNotEmpty) {
+        final currentFilter = statusFilter.trim().toLowerCase();
+        final currentStatus = (r.inspectionStatus ?? '').trim().toLowerCase();
+        
+        if (currentFilter == 'upcoming') {
+           if (currentStatus != 'scheduled') return false;
+        } else {
+           if (currentStatus != currentFilter) return false;
+        }
+      }
 
-          final response = await ApiService.post(
-            ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
-              limit: pageLimit,
-              pageNumber: _currentPage,
-            ),
-            body,
-          );
+      // 2. EXACT APPOINTMENT ID MATCHING
+      if (isExactIdSearch) {
+        return r.appointmentId.toLowerCase().trim() == q.toLowerCase().trim();
+      }
 
-          final apiTotal = response['total'] ?? 0;
-          maxTotal += apiTotal as int;
+      // 3. TEXT FIELDS INDEX MATCHING (Simulated Compound Index)
+      final indexString = [
+        r.appointmentId,
+        r.make,
+        r.model,
+        r.variant,
+        r.customerContactNumber,
+        r.city,
+      ].join(' ').toLowerCase();
 
-          final List<dynamic> dataList = response['data'] ?? [];
-          pageResults.addAll(
-            dataList.map((json) => ScheduleModel.fromJson(json)),
-          );
-        } catch (_) {}
-      }),
-    );
-
-    totalRecords.value = maxTotal;
-
-    // Apply search filter
-    final query = searchQuery.value.toLowerCase();
-    final filtered = pageResults.where((record) {
-      final idMatch =
-          record.appointmentId.toLowerCase().contains(query);
-      final phoneMatch =
-          record.customerContactNumber.toLowerCase().contains(query);
-      final ownerMatch =
-          record.ownerName.toLowerCase().contains(query);
-      return idMatch || phoneMatch || ownerMatch;
+      // Ensure every word the user typed is found SOMEWHERE in the indexed dataset
+      return queryParts.every((part) => indexString.contains(part));
     }).toList();
+  }
 
-    // Apply locally saved snapshots for search results too
-    _applyLocalSnapshots(filtered);
+  Future<void> _warmUniversalCache(String userEmail, {VoidCallback? onProgress}) async {
+    if (_cacheWarming || _cacheWarmed) return;
+    _cacheWarming = true;
 
-    schedules.addAll(filtered);
+    try {
+      final user = UserController.instance.user.value;
+      final body = <String, dynamic>{};
+      if (user.id != 'superadmin') body['allocatedTo'] = userEmail;
 
-    // For search, stop paginating if no new results came back
-    if (pageResults.isEmpty) {
-      hasMoreData.value = false;
+      _universalCache.clear();
+      final seen = <String>{};
+      int limit = 200; // Safe chunk size that Kong proxy respects under 2s
+      int currentPage = 1;
+      int totalItems = 1;
+
+      while (_universalCache.length < totalItems) {
+        final response = await ApiService.post(
+          ApiConstants.inspectionEngineerSchedulesPaginatedUrl(
+            limit: limit,
+            pageNumber: currentPage,
+          ),
+          body,
+        );
+
+        totalItems = response['total'] ?? 0;
+        final List data = response['data'] ?? [];
+        if (data.isEmpty) break;
+
+        for (final json in data) {
+          final model = ScheduleModel.fromJson(json);
+          if (seen.add(model.appointmentId)) {
+            _universalCache.add(model);
+          }
+        }
+        
+        // Let the UI progressively see results!
+        onProgress?.call();
+        currentPage++;
+      }
+
+      _cacheWarmed = true;
+    } catch (e) {
+      debugPrint('⚠️ [Cache] Failed: $e');
+    } finally {
+      _cacheWarming = false;
     }
   }
 
@@ -269,8 +338,10 @@ class ScheduleController extends GetxController {
 
   /// Refresh schedules
   Future<void> refreshSchedules() async {
+    _cacheWarmed = false;
+    _cacheWarming = false;
     hasMoreData.value = true;
-    await fetchSchedules();
+    await fetchSchedules(isRefresh: true);
   }
 
   /// Get display title based on status filter
@@ -290,7 +361,9 @@ class ScheduleController extends GetxController {
 
   /// Get subtitle
   String get screenSubtitle {
-    if (searchQuery.value.isNotEmpty) return 'matches found';
+    if (searchQuery.value.isNotEmpty) {
+      return 'records found';
+    }
     if (statusFilter == 'Upcoming' ||
         statusFilter == InspectionStatuses.scheduled)
       return 'inspection leads';

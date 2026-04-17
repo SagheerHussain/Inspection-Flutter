@@ -1,3 +1,5 @@
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 import 'package:inspection_app/data/services/notifications/notification_sevice.dart';
 
 import '../../../utils/popups/exports.dart';
@@ -32,11 +34,62 @@ class LoginController extends GetxController {
 
   @override
   void onInit() {
-    // Pre-filling with credentials disabled as per production requirements
-    userName.text = '';
-    phoneNumber.text = '';
-    password.text = '';
     super.onInit();
+    _loadSecureCredentials();
+  }
+
+  Future<void> _loadSecureCredentials() async {
+    try {
+      const secureStorage = FlutterSecureStorage();
+      final savedUser = await secureStorage.read(key: 'SECURE_USERNAME');
+      final savedPass = await secureStorage.read(key: 'SECURE_PASSWORD');
+      
+      if (savedUser != null && savedPass != null && savedUser.isNotEmpty && savedPass.isNotEmpty) {
+        userName.text = savedUser;
+        password.text = savedPass;
+        TLoaders.customToast(message: 'Loaded securely from Keychain!');
+        await _tryBiometricLogin();
+      } else {
+        // Fallback to local storage if empty completely
+        userName.text = localStorage.read('SAVED_USERNAME') ?? '';
+        password.text = localStorage.read('SAVED_PASSWORD') ?? '';
+        if (userName.text.isNotEmpty) {
+          TLoaders.customToast(message: 'Loaded from Local fallback!');
+          await _tryBiometricLogin();
+        }
+      }
+    } catch (e) {
+      debugPrint("Error reading secure storage: $e");
+      TLoaders.errorSnackBar(title: 'Keychain Read Error', message: e.toString());
+      
+      // Fallback to local storage if keychain fails (like in simulators)
+      userName.text = localStorage.read('SAVED_USERNAME') ?? '';
+      password.text = localStorage.read('SAVED_PASSWORD') ?? '';
+
+      if (userName.text.isNotEmpty && password.text.isNotEmpty) {
+        await _tryBiometricLogin();
+      }
+    }
+  }
+
+  Future<void> _tryBiometricLogin() async {
+    try {
+      final localAuth = LocalAuthentication();
+      final canCheckBiometrics = await localAuth.canCheckBiometrics;
+      final isDeviceSupported = await localAuth.isDeviceSupported();
+      
+      if (!canCheckBiometrics && !isDeviceSupported) return;
+
+      final didAuthenticate = await localAuth.authenticate(
+        localizedReason: 'Please authenticate to safely log in',
+      );
+
+      if (didAuthenticate) {
+        await login();
+      }
+    } catch (e) {
+      // Ignore auth cancellations or errors silently without blocking login screen
+    }
   }
 
   /// Login using Otobix Backend API
@@ -117,11 +170,24 @@ class LoginController extends GetxController {
       localStorage.write('user_id', storedUserId);
       localStorage.write('uid', storedUserId);
       localStorage.write('mongodb_id', storedUserId);
+      localStorage.write('SAVED_USERNAME', userName.text.trim());
+      localStorage.write('SAVED_PASSWORD', password.text.trim());
       localStorage.write('USER_EMAIL', user.email);
       localStorage.write('USER_NAME', user.fullName);
       localStorage.write('USER_USERNAME', user.userName);
       localStorage.write('INSPECTION_ENGINEER_NUMBER', user.phoneNumber);
       localStorage.write('USER_ROLE', user.role.name);
+
+      try {
+        // Save securely to OS keychain for biometrics
+        const secureStorage = FlutterSecureStorage();
+        await secureStorage.write(key: 'SECURE_USERNAME', value: userName.text.trim());
+        await secureStorage.write(key: 'SECURE_PASSWORD', value: password.text.trim());
+        TLoaders.customToast(message: 'Credentials pushed to Keychain');
+      } catch (e) {
+        debugPrint("Error writing securely: $e");
+        TLoaders.errorSnackBar(title: 'Keychain Write Error', message: e.toString());
+      }
 
       // Save token if present
       if (response['token'] != null) {
