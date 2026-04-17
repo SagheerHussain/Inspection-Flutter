@@ -201,10 +201,13 @@ class InspectionFormController extends GetxController {
     debugPrint('🚀 Starting fetchInspectionData for $appointmentId');
     isLoading.value = true;
     try {
-      // ── STEP 1: ALWAYS CHECK FOR LOCAL DRAFT FIRST (ALL MODES) ──
+      // ── STEP 1: ALWAYS CHECK FOR LOCAL DRAFT FIRST (EXCEPT RE-INSPECTION) ──
       final snapshot = _storage.read(_snapshotKey);
+      final user = UserController.instance.user.value;
 
-      if (snapshot != null && snapshot is Map) {
+      // Logic: Use draft only if NOT in Re-Inspection mode.
+      // For Re-Inspection, we always want to fetch previous data from the API first.
+      if (snapshot != null && snapshot is Map && !isReInspection) {
         debugPrint('📂 Found local draft for $appointmentId');
         final cachedId =
             snapshot['_id']?.toString() ?? snapshot['id']?.toString();
@@ -287,7 +290,6 @@ class InspectionFormController extends GetxController {
 
       // ── RE-INSPECTION & SUPERADMIN EDIT FLOW ──
       // API data takes priority ONLY if no local draft exists.
-      final user = UserController.instance.user.value;
       if (isReInspection || user.id == 'superadmin') {
         try {
           final response = await ApiService.get(
@@ -501,6 +503,7 @@ class InspectionFormController extends GetxController {
       'frontCentreArmRestDropdownList': 'frontCentreArmRest',
       'rearSeatsDropdownList': 'rearSeats',
       'thirdRowSeatsDropdownList': 'thirdRowSeats',
+      'noOfAirBags': 'noOfAirBags', // Ensure Airbag count pre-fills
     };
 
     // For each mapping: if the API key exists in carData but the form key
@@ -565,6 +568,8 @@ class InspectionFormController extends GetxController {
   void _preFillMedia(Map<String, dynamic> carData) {
     // ── Image field mappings: API key → form key ──
     // The API stores images under legacy keys; the form expects new keys.
+    // ── Image field mappings: API key → form key ──
+    // The API stores images under legacy keys; the form expects new keys.
     final Map<String, String> imageMappings = {
       'rcTaxToken': 'rcTokenImages',
       'insuranceCopy': 'insuranceImages',
@@ -579,10 +584,11 @@ class InspectionFormController extends GetxController {
       'rhsRearAlloyImages': 'rhsRearWheelImages',
       'rhsFrontAlloyImages': 'rhsFrontWheelImages',
       'engineBay': 'engineBayImages',
-      'additionalImages': 'additionalImages', // same key
+      'additionalImages': 'additionalImages',
       'engineSound': 'engineVideo',
       'exhaustSmokeImages': 'exhaustSmokeVideo',
-      'meterConsoleWithEngineOn': 'meterConsoleWithEngineOnImages',
+      'meterConsoleWithEngineOn': 'meterConsoleWithEngineOnImages', // Legacy mapping
+      'exhaustSmokeVideo': 'clusterMeterImages', // User requested mapping
       'frontSeatsFromDriverSideDoorOpen': 'frontSeatsFromDriverSideImages',
       'rearSeatsFromRightSideDoorOpen': 'rearSeatsFromRightSideImages',
       'dashboardFromRearSeat': 'dashboardImages',
@@ -590,8 +596,26 @@ class InspectionFormController extends GetxController {
       'bootdoorimages': 'bootDoorImages',
     };
 
-    // ── Direct image keys (same key in API and form) ──
+    // ── Direct image keys (same key in API and form or newer API versions) ──
     final List<String> directImageKeys = [
+      'rcTokenImages',
+      'duplicateKeyImages',
+      'frontMainImages',
+      'frontBumperImages',
+      'lhsFullViewImages',
+      'lhsFrontWheelImages',
+      'lhsRearWheelImages',
+      'rearMainImages',
+      'bootDoorOpenImages',
+      'rhsFullViewImages',
+      'rhsRearWheelImages',
+      'rhsFrontWheelImages',
+      'engineBayImages',
+      'engineVideo',
+      'exhaustSmokeVideo',
+      'frontSeatsFromDriverSideImages',
+      'rearSeatsFromRightSideImages',
+      'dashboardImages',
       'frontWindshieldImages',
       'roofImages',
       'lhsHeadlampImages',
@@ -1226,25 +1250,28 @@ class InspectionFormController extends GetxController {
         maxHeight: 1080,
       );
       if (picked != null) {
-        // Navigation to ImageEditorScreen (Manual Blur & Watermarking)
-        final String? editedPath = await Get.to(
-          () => ImageEditorScreen(imagePath: picked.path),
-        );
+        String finalPath = picked.path;
 
-        if (editedPath != null && editedPath.isNotEmpty) {
-          final currentList = imageFiles[key] ?? [];
-          currentList.add(editedPath);
-          imageFiles[key] = List.from(currentList);
-          imageFiles.refresh();
-
-          // Trigger Upload with Edited File
-          // Uploading is now handled by the background queue upon submission.
-          // We only save the path locally for the offline queue.
-
-          // Save to Gallery if captured from Camera
-          if (source == ImageSource.camera) {
-            _saveToGallery(editedPath);
+        // Navigation to ImageEditorScreen (Manual Blur & Watermarking) - ONLY for Main Body Photos
+        if (key == 'frontMainImages' || key == 'rearMainImages') {
+          final String? editedPath = await Get.to(
+            () => ImageEditorScreen(imagePath: picked.path),
+          );
+          
+          if (editedPath == null || editedPath.isEmpty) {
+            return; // User cancelled the editor
           }
+          finalPath = editedPath;
+        }
+
+        final currentList = imageFiles[key] ?? [];
+        currentList.add(finalPath);
+        imageFiles[key] = List.from(currentList);
+        imageFiles.refresh();
+
+        // Save to Gallery if captured from Camera
+        if (source == ImageSource.camera) {
+          _saveToGallery(finalPath);
         }
       }
     } catch (e) {
@@ -2180,7 +2207,14 @@ class InspectionFormController extends GetxController {
       // 8. Clear local draft immediately
       await _clearSnapshot();
 
-      // 9. Show success and navigate back — sync happens in background
+      // 9. Trigger global refresh for main screens
+      try {
+        ScheduleController.refreshAllInstances();
+      } catch (e) {
+        debugPrint('⚠️ Failed to refresh schedules: $e');
+      }
+
+      // 10. Show success and navigate back
       try { TLoaders.hideSnackBar(); } catch (_) {}
       _showOffloadQueuedDialog();
     } catch (e) {
@@ -3007,11 +3041,9 @@ class InspectionFormController extends GetxController {
           );
           // debugPrint('✅ Telecalling status updated to Inspected: $statusResponse');
 
-          // Refresh schedule list in background (non-blocking)
+          // Refresh schedule list globally
           try {
-            if (Get.isRegistered<ScheduleController>()) {
-              Get.find<ScheduleController>().refreshSchedules();
-            }
+            ScheduleController.refreshAllInstances();
           } catch (_) {}
         } else {
           // debugPrint('⚠️ schedule is null — cannot update telecalling status (Re-Inspection)');
@@ -3543,14 +3575,77 @@ class InspectionFormController extends GetxController {
         } else if (field.type == FType.date) {
           updateField(field.key, "2024-01-01");
 
-        // ── Step 3: Fill image fields with bundled test image ──
-        } else if (field.type == FType.image && testImagePath != null) {
-          // Fill up to minImages slots (at least 1, at most maxImages)
-          final needed = field.minImages > 0 ? field.minImages : 1;
-          final slots = needed.clamp(1, field.maxImages);
-          final paths = List.generate(slots, (_) => testImagePath);
-          imageFiles[field.key] = paths;
-          imageFiles.refresh();
+        // ── Step 3: Fill image fields with matching assets from the dedicated folder ──
+        } else if (field.type == FType.image) {
+          final assetBase = 'assets/inspection-form-field-images';
+          List<String> matchedPaths = [];
+
+          // 1. Try to find assets matching the label
+          String cleanLabel = field.label.trim();
+          if (cleanLabel.endsWith(' Image')) cleanLabel = cleanLabel.substring(0, cleanLabel.length - 6);
+          if (cleanLabel.endsWith(' Images')) cleanLabel = cleanLabel.substring(0, cleanLabel.length - 7);
+          
+          // Special case for RC Image which needs 2 images
+          if (field.key == 'rcTokenImages') {
+            final path1 = await _extractAssetToTemp('$assetBase/RC Token Image 1.png', 'rc_token_1.png');
+            final path2 = await _extractAssetToTemp('$assetBase/RC Token Image 2.png', 'rc_token_2.png');
+            if (path1 != null) matchedPaths.add(path1);
+            if (path2 != null) matchedPaths.add(path2);
+          } else {
+            // General matching strategy
+            // Try "CleanLabel Image.png" and "CleanLabel Images.png" and "CleanLabel.png"
+            String? path = await _extractAssetToTemp('$assetBase/$cleanLabel Image.png', '${field.key}.png');
+            if (path == null) {
+               path = await _extractAssetToTemp('$assetBase/$cleanLabel Images.png', '${field.key}.png');
+            }
+            if (path == null) {
+               path = await _extractAssetToTemp('$assetBase/${field.label}.png', '${field.key}.png');
+            }
+            
+            // Try with some manual mapping for common discrepancies
+            if (path == null) {
+              if (field.label == 'Front Main') path = await _extractAssetToTemp('$assetBase/Front Main.png', '${field.key}.png');
+              if (field.label == 'LHS Full View') path = await _extractAssetToTemp('$assetBase/LHS Full View.png', '${field.key}.png');
+              if (field.label == 'Rear Main') path = await _extractAssetToTemp('$assetBase/Rear Main.png', '${field.key}.png');
+              if (field.label == 'RHS Full View') path = await _extractAssetToTemp('$assetBase/RHS Full View.png', '${field.key}.png');
+              if (field.label == 'Engine Bay') path = await _extractAssetToTemp('$assetBase/Engine Bay.png', '${field.key}.png');
+              if (field.label == 'Cluster Meter (With Engine Running)') path = await _extractAssetToTemp('$assetBase/Cluster Meter (with engine Running).png', '${field.key}.png');
+              if (field.label.contains('Boot Door Open Image')) {
+                path = await _extractAssetToTemp('$assetBase/Boot Door Open image.png', '${field.key}.png');
+                path ??= await _extractAssetToTemp('$assetBase/Rear With Boot Door Open Image.png', '${field.key}.png');
+              }
+              if (field.label.contains('Front Bumper LHS 45')) path = await _extractAssetToTemp('$assetBase/Front Bumper LHS 45.png', '${field.key}.png');
+              if (field.label.contains('Front Bumper RHS 45')) path = await _extractAssetToTemp('$assetBase/Front Bumper RHS 45.png', '${field.key}.png');
+              if (field.label.contains('Rear Bumper LHS 45')) path = await _extractAssetToTemp('$assetBase/Rear Bumper LHS 45.png', '${field.key}.png');
+              if (field.label.contains('Rear Bumper RHS 45')) path = await _extractAssetToTemp('$assetBase/Rear Bumper RHS 45.png', '${field.key}.png');
+              if (field.label == 'Bonnet Open') path = await _extractAssetToTemp('$assetBase/Bonnet open.png', '${field.key}.png');
+              if (field.label == 'Bonnet Closed') path = await _extractAssetToTemp('$assetBase/Bonnet Close.png', '${field.key}.png');
+              if (field.label == 'Front Seat from Driver Side (Door Open)') path = await _extractAssetToTemp('$assetBase/Front Seat From Driver Side (Door open).png', '${field.key}.png');
+              if (field.label == 'Rear Seat from Right Side (Door Open)') path = await _extractAssetToTemp('$assetBase/Rear Seat From Right Side (Door open).png', '${field.key}.png');
+              if (field.label == 'Dashboard from Rear Seat') path = await _extractAssetToTemp('$assetBase/Dashboard From Rear seat.png', '${field.key}.png');
+              if (field.label == 'LHS Quarter Panel With Rear Door Open Image') path = await _extractAssetToTemp('$assetBase/LHS Quarter Panel With Rear Door Open Image.png', '${field.key}.png');
+              if (field.label == 'LHS Quarter Panel With Rear Door Closed Image') path = await _extractAssetToTemp('$assetBase/LHS Quarter Panel with Rear door closed Image.png', '${field.key}.png');
+              if (field.label == 'RHS Quarter Panel With Rear Door Open Image') path = await _extractAssetToTemp('$assetBase/RHS Quarter Panel with Rear door open Image.png', '${field.key}.png');
+              if (field.label == 'RHS Quarter Panel With Rear Door Closed Image') path = await _extractAssetToTemp('$assetBase/RHS Quarter Panel with Rear door Close Image.png', '${field.key}.png');
+            }
+
+            if (path != null) {
+              matchedPaths.add(path);
+            } else if (testImagePath != null) {
+              // Fallback to default if no match
+              matchedPaths.add(testImagePath);
+            }
+          }
+
+          if (matchedPaths.isNotEmpty) {
+            // If field needs more images than we matched, duplicate the last one
+            final needed = field.minImages > 0 ? field.minImages : 1;
+            while (matchedPaths.length < needed && matchedPaths.length < field.maxImages) {
+              matchedPaths.add(matchedPaths.last);
+            }
+            imageFiles[field.key] = matchedPaths;
+            imageFiles.refresh();
+          }
 
         // ── Step 4: Fill video fields with bundled test video ──
         } else if (field.type == FType.video && testVideoPath != null) {

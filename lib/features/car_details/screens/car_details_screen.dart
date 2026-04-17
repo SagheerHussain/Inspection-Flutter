@@ -380,7 +380,6 @@ class _SectionContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final List<Widget> children = [];
     List<F> fields = section.fields;
 
     // 🏆 Custom Sequence for Interior section
@@ -427,180 +426,34 @@ class _SectionContent extends StatelessWidget {
           .toList();
     }
 
-    final Set<String> processedKeys = {};
+    final filteredFields = fields.where((f) => f.key != 'frontBumperImages' && f.key != 'rearBumperImages').toList();
 
-    for (int i = 0; i < fields.length; i++) {
-      final field = fields[i];
-      if (processedKeys.contains(field.key)) continue;
-
-      // Start a new group with the current field
-      final List<String> currentGroup = [field.key];
-      processedKeys.add(field.key);
-
-      // Disable grouping for Interior section to keep the sequence flat as requested
-      if (section.title != 'Interior') {
-        // Look ahead for related fields (images/videos/comments) that should be in the same card
-        for (int j = i + 1; j < fields.length; j++) {
-          final nextField = fields[j];
-          if (processedKeys.contains(nextField.key)) continue;
-
-          // Relation Check: If next field is an image/video/additional field for the current one
-          final bool isRelated =
-              nextField.key.toLowerCase().contains(field.key.toLowerCase()) &&
-              (nextField.type == FType.image ||
-                  nextField.type == FType.video ||
-                  nextField.key.toLowerCase().contains('comment'));
-
-          // OR: If the current field is an image and the next one is ALSO an image for the same "part"
-          final bool isPartImage =
-              (field.type == FType.image || field.type == FType.video) &&
-              (nextField.type == FType.image || nextField.type == FType.video) &&
-              nextField.label.toLowerCase().contains(field.label.toLowerCase());
-
-          if (isRelated || isPartImage) {
-            currentGroup.add(nextField.key);
-            processedKeys.add(nextField.key);
-          } else {
-            break; // Stop grouping once a non-related field is encountered
-          }
-        }
-      }
-
-      // Special case: "Full View" for the first image of a main body section
-      String groupTitle = field.label;
-      if (i == 0 &&
-          (field.type == FType.image || field.type == FType.video) &&
-          ['Front', 'Rear', 'Left', 'Right'].contains(section.title)) {
-        groupTitle = 'Full View';
-      }
-
-      children.add(_buildGroup(context, groupTitle, currentGroup));
-    }
-
-    return ListView(
+    return ListView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-      children: children,
+      itemCount: filteredFields.length,
+      itemBuilder: (context, index) {
+        return _DetailCard(field: filteredFields[index], car: car, dark: dark);
+      },
     );
-  }
-
-  Widget _buildGroup(BuildContext context, String groupTitle, List<String> fieldKeys) {
-    // Helper to find field def
-    F? findField(String k) {
-      for (final s in InspectionFieldDefs.sections) {
-        for (final f in s.fields) {
-          if (f.key == k) return f;
-        }
-      }
-      return null;
-    }
-
-    final List<Widget> rows = [];
-    for (final key in fieldKeys) {
-      final field = findField(key);
-      if (field == null) continue;
-      
-      // 🛟 Airbag reserved index mapping
-      final airbagKeys = [
-        'driverAirbagImages',
-        'coDriverAirbagImages',
-        'driverSeatAirbagImages',
-        'coDriverSeatAirbagImages',
-        'rhsCurtainAirbagImages',
-        'lhsCurtainAirbagImages',
-        'driverKneeAirbagImages',
-        'coDriverKneeAirbagImages',
-        'rhsRearSideAirbagImages',
-        'lhsRearSideAirbagImages'
-      ];
-      if (airbagKeys.contains(field.key)) {
-        final index = airbagKeys.indexOf(field.key);
-        // Only show if the slot in the 10-index array exists and has a valid URL
-        if (index >= car.airbagimages.length || car.airbagimages[index].isEmpty) continue;
-      }
-
-      rows.add(_GroupedDetailRow(field: field, car: car, dark: dark));
-    }
-
-    if (rows.isEmpty) return const SizedBox.shrink();
-
-    final headerColor = _getHeaderTintColor(groupTitle);
-    
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: dark ? const Color(0xFF1E243A) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: dark ? 0.4 : 0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (groupTitle.isNotEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: dark ? headerColor.withValues(alpha: 0.15) : headerColor.withValues(alpha: 0.08),
-                border: Border(
-                  bottom: BorderSide(color: dark ? Colors.white10 : Colors.grey.shade100),
-                  left: BorderSide(color: headerColor, width: 4),
-                ),
-              ),
-              child: Text(
-                groupTitle.toUpperCase(),
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w900,
-                  color: dark ? headerColor.withValues(alpha: 0.9) : headerColor.withValues(alpha: 0.8),
-                  letterSpacing: 1.2,
-                ),
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(children: rows),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Color _getHeaderTintColor(String title) {
-    if (title.isEmpty) return const Color(0xFF0D6EFD);
-    final t = title.toLowerCase();
-    if (t.contains('identification')) return Colors.indigo;
-    if (t.contains('chassis') || t.contains('vin')) return Colors.blue;
-    if (t.contains('rc') || t.contains('doc')) return Colors.teal;
-    if (t.contains('tax') || t.contains('insur')) return Colors.green;
-    if (t.contains('legal') || t.contains('key')) return Colors.blueGrey;
-    if (t.contains('interior') || t.contains('airbag') || t.contains('zone')) return Colors.purple;
-    if (t.contains('engine') || t.contains('mech')) return Colors.deepOrange;
-    if (t.contains('view') || t.contains('full')) return Colors.cyan;
-    final palette = [Colors.blue, Colors.teal, Colors.purple, Colors.deepOrange, Colors.indigo, Colors.pink, Colors.cyan, Colors.orange];
-    return palette[(title.length + title.codeUnits.fold<int>(0, (p, c) => p + c)) % palette.length];
   }
 }
 
-class _GroupedDetailRow extends StatelessWidget {
+class _DetailCard extends StatelessWidget {
   final F field;
   final CarDetailsModel car;
   final bool dark;
 
-  const _GroupedDetailRow({required this.field, required this.car, required this.dark});
+  const _DetailCard({required this.field, required this.car, required this.dark});
 
   @override
   Widget build(BuildContext context) {
     final value = car.getFieldValue(field.key);
-    final images = car.getFieldImages(field.key);
+    
+    // 🧱 STRICT MODE: Only show images if the field is explicitly an image/video field in the form
+    final bool isImageField = field.type == FType.image || field.type == FType.video;
+    final images = isImageField ? car.getFieldImages(field.key) : <String>[];
     
     final String displayValue = _formatDisplayValue(value);
     final bool hasValue = displayValue != '-' && !displayValue.startsWith('http');
@@ -609,53 +462,69 @@ class _GroupedDetailRow extends StatelessWidget {
     // Skip if nothing to show
     if (!hasValue && !hasImages) return const SizedBox.shrink();
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: dark ? const Color(0xFF1E243A) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: dark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: dark ? 0.3 : 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 1. Text Info (Label + Value)
-          Expanded(
-            flex: 4,
+          // 1. Header (Label & Value Chip)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  field.label,
+                  field.label.toUpperCase(),
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: dark ? Colors.grey.shade500 : Colors.grey.shade600,
+                    fontWeight: FontWeight.w800,
+                    color: dark ? Colors.grey.shade400 : Colors.grey.shade500,
+                    letterSpacing: 0.8,
                   ),
                 ),
-                const SizedBox(height: 4),
-                if (hasValue)
+                if (hasValue) ...[
+                  const SizedBox(height: 8),
                   _ValueBadge(value: displayValue, dark: dark),
+                ],
               ],
             ),
           ),
 
-          // 2. Images Side-by-Side
-          if (hasImages) ...[
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 5,
-              child: SizedBox(
-                height: 54,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: images.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 8),
-                  itemBuilder: (context, index) => _ImageThumbnail(
-                    url: images[index],
-                    label: '${field.label} ${index + 1}',
-                    allImages: images,
+          // 2. Images Side-by-Side (if present)
+          if (hasImages)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Divider(height: 1),
+                SizedBox(
+                  height: 140, 
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(12),
+                    scrollDirection: Axis.horizontal,
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: images.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 12),
+                    itemBuilder: (context, index) => _ImageThumbnail(
+                      url: images[index],
+                      label: field.label,
+                      allImages: images,
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
-          ],
         ],
       ),
     );
@@ -731,10 +600,23 @@ class _ValueBadge extends StatelessWidget {
 
   Color _getStatusColor(String value, bool dark) {
     final lower = value.toLowerCase();
-    if (lower == 'okay' || lower == 'ok' || lower == 'original' || lower == 'yes') return Colors.green.shade500;
-    if (lower.contains('repaired') || lower.contains('repainted') || lower.contains('replaced')) return Colors.orange.shade500;
-    if (lower.contains('dent') || lower.contains('scratch') || lower.contains('broken') || lower.contains('damage') || lower == 'no') return Colors.red.shade500;
-    return dark ? Colors.white70 : Colors.black87;
+    
+    // Success/Positive
+    if (lower == 'okay' || lower == 'ok' || lower == 'original' || lower == 'yes' || lower == 'present' || lower.contains('working')) {
+      return const Color(0xFF10B981); // Emerald Green
+    }
+    
+    // Warning/Neutral
+    if (lower.contains('repaired') || lower.contains('repainted') || lower.contains('replaced') || lower.contains('weak') || lower.contains('fair')) {
+      return const Color(0xFFF59E0B); // Amber
+    }
+    
+    // Danger/Negative
+    if (lower.contains('dent') || lower.contains('scratch') || lower.contains('broken') || lower.contains('damage') || lower == 'no' || lower == 'deployed' || lower == 'dead') {
+      return const Color(0xFFEF4444); // Red
+    }
+    
+    return dark ? Colors.white70 : const Color(0xFF475569);
   }
 }
 
@@ -755,33 +637,73 @@ class _ImageThumbnail extends StatelessWidget {
         MaterialPageRoute(builder: (_) => _ImageGalleryScreen(images: allImages, title: label, initialIndex: allImages.indexOf(url))),
       ),
       child: Container(
-        width: 70,
+        width: 140,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
-          color: Colors.black12,
+          borderRadius: BorderRadius.circular(12),
+          color: Colors.black.withValues(alpha: 0.05),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4, offset: const Offset(0, 2)),
+          ],
         ),
         clipBehavior: Clip.antiAlias,
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              url,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 20, color: Colors.grey)),
+            Hero(
+              tag: url,
+              child: isVideo 
+                ? _VideoThumbnail(url: url)
+                : Image.network(
+                    url,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, size: 24, color: Colors.grey)),
+                  ),
+            ),
+            // Image Label Chip
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 8,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.w900, letterSpacing: 0.4),
+                ),
+              ),
             ),
             if (isVideo)
-              const Center(child: Icon(Icons.play_circle_fill, color: Colors.white, size: 24)),
+              Center(
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: const BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
+                  child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 28),
+                ),
+              ),
             Positioned(
               bottom: 0,
               left: 0,
               right: 0,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                color: Colors.black54,
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.black.withValues(alpha: 0.7), Colors.transparent],
+                    begin: Alignment.bottomCenter,
+                    end: Alignment.topCenter,
+                  ),
+                ),
                 child: Text(
-                  isVideo ? 'VIDEO' : 'IMAGE',
+                  isVideo ? 'PLAY VIDEO' : 'VIEW FULL',
                   textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white, fontSize: 7, fontWeight: FontWeight.bold),
+                  style: const TextStyle(color: Colors.white, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5),
                 ),
               ),
             ),
@@ -835,6 +757,45 @@ class _ImageGalleryScreen extends StatelessWidget {
         },
       ),
     );
+  }
+}
+
+class _VideoThumbnail extends StatefulWidget {
+  final String url;
+  const _VideoThumbnail({required this.url});
+
+  @override
+  State<_VideoThumbnail> createState() => _VideoThumbnailState();
+}
+
+class _VideoThumbnailState extends State<_VideoThumbnail> {
+  late VideoPlayerController _controller;
+  bool _initialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url))
+      ..initialize().then((_) {
+        if (mounted) setState(() => _initialized = true);
+      });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_initialized) {
+      return Container(
+        color: Colors.black12,
+        child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    }
+    return VideoPlayer(_controller);
   }
 }
 

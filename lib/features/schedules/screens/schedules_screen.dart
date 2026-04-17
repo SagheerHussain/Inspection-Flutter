@@ -1287,7 +1287,7 @@ class _ScheduleCard extends StatelessWidget {
                 Text(
                   'View Details',
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                    color: const Color.fromARGB(255, 34, 34, 34),
+                    color: dark ? Colors.white : const Color.fromARGB(255, 34, 34, 34),
                     fontWeight: FontWeight.bold,
                   ),
                 ),

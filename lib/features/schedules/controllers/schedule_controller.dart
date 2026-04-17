@@ -39,6 +39,30 @@ class ScheduleController extends GetxController {
   static bool _cacheWarmed = false;
   static bool _cacheWarming = false;
   // ───────────────────────────────────────────────────────────────
+  static void refreshAllInstances() {
+    final tags = [
+      'schedule_Running',
+      'schedule_Scheduled',
+      'schedule_Re-Inspection',
+      'schedule_Re-Scheduled',
+      'schedule_Inspected',
+      'schedule_Cancelled',
+      'schedule_Upcoming',
+      'search_results',
+    ];
+
+    for (final tag in tags) {
+      if (Get.isRegistered<ScheduleController>(tag: tag)) {
+        Get.find<ScheduleController>(tag: tag).refreshSchedules();
+      }
+    }
+
+    // Also refresh dashboard stats
+    if (Get.isRegistered<DashboardStatsController>()) {
+      Get.find<DashboardStatsController>().refresh();
+    }
+  }
+
   static void updateScheduleGlobally(
     String appointmentId, {
     String? make,
