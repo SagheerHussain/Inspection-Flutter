@@ -115,7 +115,7 @@ class CarModel {
   final List<String>
   lhsQuarterPanelImages; // divided into lhsQuarterPanelWithRearDoorOpenImages and lhsQuarterPanelWithRearDoorClosedImages
   final List<String> rearMain; // renamed to rearMainImages
-  final String rearWithBootDoorOpen; // renamed to rearWithBootDoorOpenImages
+  final String rearWithBootDoorOpen; // renamed to bootDoorOpenImages
   final List<String>
   rearBumperImages; // divided into rearBumperLhs45DegreeImages, rearBumperRhs45DegreeImages and rearBumperImages
   final List<String> lhsTailLampImages;
@@ -210,7 +210,8 @@ class CarModel {
   final String leatherSeats; // removed and merged to seatsUpholstery
   final String fabricSeats; // removed and merged to seatsUpholstery
   final String commentsOnElectricals; // removed
-  final List<String> meterConsoleWithEngineOn; // renamed to meterConsoleWithEngineOnImages
+  final List<String>
+  meterConsoleWithEngineOn; // renamed to meterConsoleWithEngineOnImages
   final List<String> sunroofImages;
   final List<String>
   frontSeatsFromDriverSideDoorOpen; // renamed to frontSeatsFromDriverSideImages
@@ -307,7 +308,7 @@ class CarModel {
   final List<String> lhsQuarterPanelWithRearDoorOpenImages;
   final List<String> lhsQuarterPanelWithRearDoorClosedImages;
   final List<String> rearMainImages;
-  final List<String> rearWithBootDoorOpenImages;
+  final List<String> bootDoorOpenImages;
   final List<String> bootDoorImages;
   final List<String> rearBumperLhs45DegreeImages;
   final List<String> rearBumperRhs45DegreeImages;
@@ -720,7 +721,7 @@ class CarModel {
     required this.lhsQuarterPanelWithRearDoorOpenImages,
     required this.lhsQuarterPanelWithRearDoorClosedImages,
     required this.rearMainImages,
-    required this.rearWithBootDoorOpenImages,
+    required this.bootDoorOpenImages,
     required this.bootDoorImages,
     required this.rearBumperLhs45DegreeImages,
     required this.rearBumperRhs45DegreeImages,
@@ -1197,10 +1198,12 @@ class CarModel {
         json["lhsQuarterPanelWithRearDoorClosedImages"],
       ),
       rearMainImages: parseStringList(json["rearMainImages"]),
-      rearWithBootDoorOpenImages: parseStringList(
-         json["rearWithBootDoorOpenImages"],
-       ),
-      bootDoorImages: parseStringList(json["bootdoorimages"] ?? json["bootDoorImages"]),
+      bootDoorOpenImages: parseStringList(
+        json["bootDoorOpenImages"] ?? json["rearWithBootDoorOpen"],
+      ),
+      bootDoorImages: parseStringList(
+        json["bootdoorimages"] ?? json["bootDoorImages"],
+      ),
       rearBumperLhs45DegreeImages: parseStringList(
         json["rearBumperLhs45DegreeImages"],
       ),
@@ -1530,7 +1533,8 @@ class CarModel {
     "lhsRearAlloyImages": lhsRearAlloyImages,
     "lhsQuarterPanelImages": lhsQuarterPanelImages.map((x) => x).toList(),
     "rearMain": rearMain.map((x) => x).toList(),
-    "rearWithBootDoorOpen": rearWithBootDoorOpenImages.isNotEmpty ? rearWithBootDoorOpenImages.first : 'N/A',
+    "rearWithBootDoorOpen":
+        bootDoorOpenImages.isNotEmpty ? bootDoorOpenImages.first : 'N/A',
     "rearBumperImages": rearBumperImages.map((x) => x).toList(),
     "lhsTailLampImages": lhsTailLampImages,
     "rhsTailLampImages": rhsTailLampImages,
@@ -1644,25 +1648,23 @@ class CarModel {
     "ieName": ieName,
     "inspectionCity": inspectionCity,
     "inspectionDate": _dateToIstUtcIso(inspectionDate),
-    "rcBookAvailabilityDropdownList":
-        rcBookAvailabilityDropdownList.join(', '),
+    "rcBookAvailabilityDropdownList": rcBookAvailabilityDropdownList.join(', '),
     "fitnessValidity": _dateToIstUtcIso(fitnessValidity),
     "yearAndMonthOfManufacture": _dateToIstUtcIso(yearAndMonthOfManufacture),
     "mismatchInRcDropdownList": mismatchInRcDropdownList.join(', '),
     "insuranceDropdownList": insuranceDropdownList.join(', '),
     "policyNumber": policyNumber,
-    "mismatchInInsuranceDropdownList":
-        mismatchInInsuranceDropdownList.join(', '),
-    "additionalDetailsDropdownList":
-        additionalDetailsDropdownList.join(', '),
+    "mismatchInInsuranceDropdownList": mismatchInInsuranceDropdownList.join(
+      ', ',
+    ),
+    "additionalDetailsDropdownList": additionalDetailsDropdownList.join(', '),
     "rcTokenImages": rcTokenImages.map((x) => x).toList(),
     "insuranceImages": insuranceImages.map((x) => x).toList(),
     "duplicateKeyImages": duplicateKeyImages.map((x) => x).toList(),
     "form26AndGdCopyIfRcIsLostImages":
         form26AndGdCopyIfRcIsLostImages.map((x) => x).toList(),
     "bonnetDropdownList": bonnetDropdownList.join(', '),
-    "frontWindshieldDropdownList":
-        frontWindshieldDropdownList.join(', '),
+    "frontWindshieldDropdownList": frontWindshieldDropdownList.join(', '),
     "roofDropdownList": roofDropdownList.join(', '),
     "frontBumperDropdownList": frontBumperDropdownList.join(', '),
     "lhsHeadlampDropdownList": lhsHeadlampDropdownList.join(', '),
@@ -1674,43 +1676,35 @@ class CarModel {
     "lhsAPillarDropdownList": lhsAPillarDropdownList.join(', '),
     "lhsBPillarDropdownList": lhsBPillarDropdownList.join(', '),
     "lhsCPillarDropdownList": lhsCPillarDropdownList.join(', '),
-    "lhsFrontWheelDropdownList":
-        lhsFrontWheelDropdownList.join(', '),
+    "lhsFrontWheelDropdownList": lhsFrontWheelDropdownList.join(', '),
     "lhsFrontTyreDropdownList": lhsFrontTyreDropdownList.join(', '),
     "lhsRearWheelDropdownList": lhsRearWheelDropdownList.join(', '),
     "lhsRearTyreDropdownList": lhsRearTyreDropdownList.join(', '),
     "lhsFrontDoorDropdownList": lhsFrontDoorDropdownList.join(', '),
     "lhsRearDoorDropdownList": lhsRearDoorDropdownList.join(', '),
-    "lhsRunningBorderDropdownList":
-        lhsRunningBorderDropdownList.join(', '),
-    "lhsQuarterPanelDropdownList":
-        lhsQuarterPanelDropdownList.join(', '),
+    "lhsRunningBorderDropdownList": lhsRunningBorderDropdownList.join(', '),
+    "lhsQuarterPanelDropdownList": lhsQuarterPanelDropdownList.join(', '),
     "rearBumperDropdownList": rearBumperDropdownList.join(', '),
     "lhsTailLampDropdownList": lhsTailLampDropdownList.join(', '),
     "rhsTailLampDropdownList": rhsTailLampDropdownList.join(', '),
-    "rearWindshieldDropdownList":
-        rearWindshieldDropdownList.join(', '),
+    "rearWindshieldDropdownList": rearWindshieldDropdownList.join(', '),
     "bootDoorDropdownList": bootDoorDropdownList.join(', '),
     "spareTyreDropdownList": spareTyreDropdownList.join(', '),
     "bootFloorDropdownList": bootFloorDropdownList.join(', '),
     "rhsRearWheelDropdownList": rhsRearWheelDropdownList.join(', '),
     "rhsRearTyreDropdownList": rhsRearTyreDropdownList.join(', '),
-    "rhsFrontWheelDropdownList":
-        rhsFrontWheelDropdownList.join(', '),
+    "rhsFrontWheelDropdownList": rhsFrontWheelDropdownList.join(', '),
     "rhsFrontTyreDropdownList": rhsFrontTyreDropdownList.join(', '),
-    "rhsQuarterPanelDropdownList":
-        rhsQuarterPanelDropdownList.join(', '),
+    "rhsQuarterPanelDropdownList": rhsQuarterPanelDropdownList.join(', '),
     "rhsAPillarDropdownList": rhsAPillarDropdownList.join(', '),
     "rhsBPillarDropdownList": rhsBPillarDropdownList.join(', '),
     "rhsCPillarDropdownList": rhsCPillarDropdownList.join(', '),
-    "rhsRunningBorderDropdownList":
-        rhsRunningBorderDropdownList.join(', '),
+    "rhsRunningBorderDropdownList": rhsRunningBorderDropdownList.join(', '),
     "rhsRearDoorDropdownList": rhsRearDoorDropdownList.join(', '),
     "rhsFrontDoorDropdownList": rhsFrontDoorDropdownList.join(', '),
     "rhsOrvmDropdownList": rhsOrvmDropdownList.join(', '),
     "rhsFenderDropdownList": rhsFenderDropdownList.join(', '),
-    "commentsOnExteriorDropdownList":
-        commentsOnExteriorDropdownList.join(', '),
+    "commentsOnExteriorDropdownList": commentsOnExteriorDropdownList.join(', '),
     "frontMainImages": frontMainImages.map((x) => x).toList(),
     "bonnetClosedImages": bonnetClosedImages.map((x) => x).toList(),
     "bonnetOpenImages": bonnetOpenImages.map((x) => x).toList(),
@@ -1726,10 +1720,7 @@ class CarModel {
     "lhsQuarterPanelWithRearDoorClosedImages":
         lhsQuarterPanelWithRearDoorClosedImages.map((x) => x).toList(),
     "rearMainImages": rearMainImages.map((x) => x).toList(),
-    "rearWithBootDoorOpenImages":
-        rearWithBootDoorOpenImages.map((x) => x).toList(),
-    "bootDoorOpenImages":
-        rearWithBootDoorOpenImages.map((x) => x).toList(),
+    "bootDoorOpenImages": bootDoorOpenImages.map((x) => x).toList(),
     // "bootdoorimages": bootDoorImages.map((x) => x).toList(),
     "rearBumperLhs45DegreeImages":
         rearBumperLhs45DegreeImages.map((x) => x).toList(),
@@ -1743,14 +1734,10 @@ class CarModel {
     "rhsQuarterPanelImages": rhsQuarterPanelImages.map((x) => x).toList(),
     "rhsRearWheelImages": rhsRearWheelImages.map((x) => x).toList(),
     "rhsFrontWheelImages": rhsFrontWheelImages.map((x) => x).toList(),
-    "upperCrossMemberDropdownList":
-        upperCrossMemberDropdownList.join(', '),
-    "radiatorSupportDropdownList":
-        radiatorSupportDropdownList.join(', '),
-    "headlightSupportDropdownList":
-        headlightSupportDropdownList.join(', '),
-    "lowerCrossMemberDropdownList":
-        lowerCrossMemberDropdownList.join(', '),
+    "upperCrossMemberDropdownList": upperCrossMemberDropdownList.join(', '),
+    "radiatorSupportDropdownList": radiatorSupportDropdownList.join(', '),
+    "headlightSupportDropdownList": headlightSupportDropdownList.join(', '),
+    "lowerCrossMemberDropdownList": lowerCrossMemberDropdownList.join(', '),
     "lhsApronDropdownList": lhsApronDropdownList.join(', '),
     "rhsApronDropdownList": rhsApronDropdownList.join(', '),
     "firewallDropdownList": firewallDropdownList.join(', '),
@@ -1758,27 +1745,24 @@ class CarModel {
     "engineDropdownList": engineDropdownList.join(', '),
     "batteryDropdownList": batteryDropdownList.join(', '),
     "coolantDropdownList": coolantDropdownList.join(', '),
-    "engineOilLevelDipstickDropdownList":
-        engineOilLevelDipstickDropdownList.join(', '),
+    "engineOilLevelDipstickDropdownList": engineOilLevelDipstickDropdownList
+        .join(', '),
     "engineOilDropdownList": engineOilDropdownList.join(', '),
     "engineMountDropdownList": engineMountDropdownList.join(', '),
-    "enginePermisableBlowByDropdownList":
-        enginePermisableBlowByDropdownList.join(', '),
+    "enginePermisableBlowByDropdownList": enginePermisableBlowByDropdownList
+        .join(', '),
     "exhaustSmokeDropdownList": exhaustSmokeDropdownList.join(', '),
     "clutchDropdownList": clutchDropdownList.join(', '),
     "gearShiftDropdownList": gearShiftDropdownList.join(', '),
-    "commentsOnEngineDropdownList":
-        commentsOnEngineDropdownList.join(', '),
-    "commentsOnEngineOilDropdownList":
-        commentsOnEngineOilDropdownList.join(', '),
-    "commentsOnTowingDropdownList":
-        commentsOnTowingDropdownList.join(', '),
-    "commentsOnTransmissionDropdownList":
-        commentsOnTransmissionDropdownList.join(', '),
-    "commentsOnRadiatorDropdownList":
-        commentsOnRadiatorDropdownList.join(', '),
-    "commentsOnOthersDropdownList":
-        commentsOnOthersDropdownList.join(', '),
+    "commentsOnEngineDropdownList": commentsOnEngineDropdownList.join(', '),
+    "commentsOnEngineOilDropdownList": commentsOnEngineOilDropdownList.join(
+      ', ',
+    ),
+    "commentsOnTowingDropdownList": commentsOnTowingDropdownList.join(', '),
+    "commentsOnTransmissionDropdownList": commentsOnTransmissionDropdownList
+        .join(', '),
+    "commentsOnRadiatorDropdownList": commentsOnRadiatorDropdownList.join(', '),
+    "commentsOnOthersDropdownList": commentsOnOthersDropdownList.join(', '),
     "engineBayImages": engineBayImages.map((x) => x).toList(),
     "lhsApronImages": lhsApronImages.map((x) => x).toList(),
     "rhsApronImages": rhsApronImages.map((x) => x).toList(),
@@ -1789,23 +1773,24 @@ class CarModel {
     "brakesDropdownList": brakesDropdownList.join(', '),
     "suspensionDropdownList": suspensionDropdownList.join(', '),
     "odometerReadingBeforeTestDrive": odometerReadingBeforeTestDrive,
-    "rearWiperWasherDropdownList":
-        rearWiperWasherDropdownList.join(', '),
+    "rearWiperWasherDropdownList": rearWiperWasherDropdownList.join(', '),
     "rearDefoggerDropdownList": rearDefoggerDropdownList.join(', '),
-    "infotainmentSystemDropdownList":
-        infotainmentSystemDropdownList.join(', '),
+    "infotainmentSystemDropdownList": infotainmentSystemDropdownList.join(', '),
     "steeringMountedMediaControls": steeringMountedMediaControls,
     "steeringMountedSystemControls": steeringMountedSystemControls,
-    "rhsFrontDoorFeaturesDropdownList":
-        rhsFrontDoorFeaturesDropdownList.join(', '),
-    "lhsFrontDoorFeaturesDropdownList":
-        lhsFrontDoorFeaturesDropdownList.join(', '),
-    "rhsRearDoorFeaturesDropdownList":
-        rhsRearDoorFeaturesDropdownList.join(', '),
-    "lhsRearDoorFeaturesDropdownList":
-        lhsRearDoorFeaturesDropdownList.join(', '),
-    "commentOnInteriorDropdownList":
-        commentOnInteriorDropdownList.join(', '),
+    "rhsFrontDoorFeaturesDropdownList": rhsFrontDoorFeaturesDropdownList.join(
+      ', ',
+    ),
+    "lhsFrontDoorFeaturesDropdownList": lhsFrontDoorFeaturesDropdownList.join(
+      ', ',
+    ),
+    "rhsRearDoorFeaturesDropdownList": rhsRearDoorFeaturesDropdownList.join(
+      ', ',
+    ),
+    "lhsRearDoorFeaturesDropdownList": lhsRearDoorFeaturesDropdownList.join(
+      ', ',
+    ),
+    "commentOnInteriorDropdownList": commentOnInteriorDropdownList.join(', '),
     "driverAirbag": driverAirbag,
     "coDriverAirbag": coDriverAirbag,
     "coDriverSeatAirbag": coDriverSeatAirbag,
@@ -1824,8 +1809,7 @@ class CarModel {
     "rearSeatsFromRightSideImages":
         rearSeatsFromRightSideImages.map((x) => x).toList(),
     "dashboardImages": dashboardImages.map((x) => x).toList(),
-    "reverseCameraDropdownList":
-        reverseCameraDropdownList.join(', '),
+    "reverseCameraDropdownList": reverseCameraDropdownList.join(', '),
     "additionalInteriorImages": additionalInteriorImages.map((x) => x).toList(),
     "acTypeDropdownList": acTypeDropdownList,
     "acCoolingDropdownList": acCoolingDropdownList,
@@ -1847,30 +1831,26 @@ class CarModel {
     "blacklistStatus": blacklistStatus,
     "rtoNocImages": rtoNocImages.map((x) => x).toList(),
     "rtoForm28Images": rtoForm28Images.map((x) => x).toList(),
-    "frontWiperAndWasherDropdownList":
-        frontWiperAndWasherDropdownList.join(', '),
+    "frontWiperAndWasherDropdownList": frontWiperAndWasherDropdownList.join(
+      ', ',
+    ),
     "frontWiperAndWasherImages":
         frontWiperAndWasherImages.map((x) => x).toList(),
-    "lhsRearFogLampDropdownList":
-        lhsRearFogLampDropdownList.join(', '),
+    "lhsRearFogLampDropdownList": lhsRearFogLampDropdownList.join(', '),
     "lhsRearFogLampImages": lhsRearFogLampImages.map((x) => x).toList(),
-    "rhsRearFogLampDropdownList":
-        rhsRearFogLampDropdownList.join(', '),
+    "rhsRearFogLampDropdownList": rhsRearFogLampDropdownList.join(', '),
     "rhsRearFogLampImages": rhsRearFogLampImages.map((x) => x).toList(),
     "rearWiperAndWasherImages": rearWiperAndWasherImages.map((x) => x).toList(),
     "spareWheelDropdownList": spareWheelDropdownList.join(', '),
     "spareWheelImages": spareWheelImages.map((x) => x).toList(),
     "cowlTopImages": cowlTopImages.map((x) => x).toList(),
     "firewallImages": firewallImages.map((x) => x).toList(),
-    "lhsSideMemberDropdownList":
-        lhsSideMemberDropdownList.join(', '),
-    "rhsSideMemberDropdownList":
-        rhsSideMemberDropdownList.join(', '),
-    "transmissionTypeDropdownList":
-        transmissionTypeDropdownList.join(', '),
+    "lhsSideMemberDropdownList": lhsSideMemberDropdownList.join(', '),
+    "rhsSideMemberDropdownList": rhsSideMemberDropdownList.join(', '),
+    "transmissionTypeDropdownList": transmissionTypeDropdownList.join(', '),
     "driveTrainDropdownList": driveTrainDropdownList.join(', '),
-    "commentsOnClusterMeterDropdownList":
-        commentsOnClusterMeterDropdownList.join(', '),
+    "commentsOnClusterMeterDropdownList": commentsOnClusterMeterDropdownList
+        .join(', '),
     "irvm": irvm,
     "dashboardDropdownList": dashboardDropdownList.join(', '),
     "acImages": acImages.map((x) => x).toList(),
@@ -1879,11 +1859,9 @@ class CarModel {
     "coDriverKneeSeatAirbag": coDriverKneeSeatAirbag,
     "driverSeatDropdownList": driverSeatDropdownList.join(', '),
     "coDriverSeatDropdownList": coDriverSeatDropdownList.join(', '),
-    "frontCentreArmRestDropdownList":
-        frontCentreArmRestDropdownList.join(', '),
+    "frontCentreArmRestDropdownList": frontCentreArmRestDropdownList.join(', '),
     "rearSeatsDropdownList": rearSeatsDropdownList.join(', '),
-    "thirdRowSeatsDropdownList":
-        thirdRowSeatsDropdownList.join(', '),
+    "thirdRowSeatsDropdownList": thirdRowSeatsDropdownList.join(', '),
     "odometerReadingAfterTestDriveImages":
         odometerReadingAfterTestDriveImages.map((x) => x).toList(),
     "odometerReadingAfterTestDriveInKms": odometerReadingAfterTestDriveInKms,

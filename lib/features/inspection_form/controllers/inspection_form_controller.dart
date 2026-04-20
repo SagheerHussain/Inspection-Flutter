@@ -588,7 +588,6 @@ class InspectionFormController extends GetxController {
       'engineSound': 'engineVideo',
       'exhaustSmokeImages': 'exhaustSmokeVideo',
       'meterConsoleWithEngineOn': 'meterConsoleWithEngineOnImages', // Legacy mapping
-      'exhaustSmokeVideo': 'clusterMeterImages', // User requested mapping
       'frontSeatsFromDriverSideDoorOpen': 'frontSeatsFromDriverSideImages',
       'rearSeatsFromRightSideDoorOpen': 'rearSeatsFromRightSideImages',
       'dashboardFromRearSeat': 'dashboardImages',
@@ -666,6 +665,7 @@ class InspectionFormController extends GetxController {
       'reverseCameraImages',
       'odometerReadingAfterTestDriveImages',
       'bootDoorImages',
+      'meterConsoleWithEngineOnImages',
     ];
 
     // Helper to extract URL list from a value
@@ -794,14 +794,14 @@ class InspectionFormController extends GetxController {
     final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages']);
 
     if (bootOpenList.isNotEmpty) {
-      imageFiles['rearWithBootDoorOpenImages'] = bootOpenList;
+      imageFiles['bootDoorOpenImages'] = bootOpenList;
     } else if (bootOpenListAlt.isNotEmpty) {
-      imageFiles['rearWithBootDoorOpenImages'] = bootOpenListAlt;
+      imageFiles['bootDoorOpenImages'] = bootOpenListAlt;
     } else {
       // Fallback: use the single-string field rearWithBootDoorOpen
       final rearBoot = carData['rearWithBootDoorOpen'];
       if (rearBoot is String && rearBoot.startsWith('http')) {
-        imageFiles['rearWithBootDoorOpenImages'] = [rearBoot];
+        imageFiles['bootDoorOpenImages'] = [rearBoot];
       }
     }
 

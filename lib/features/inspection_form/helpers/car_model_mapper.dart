@@ -333,10 +333,10 @@ CarModel buildCarModelFromForm(
     ],
     // renamed to rearMainImages
     rearMain: img('rearMainImages'),
-    // renamed to rearWithBootDoorOpenImages
+    // renamed to bootDoorOpenImages
     rearWithBootDoorOpen:
-        img('rearWithBootDoorOpenImages').isNotEmpty
-            ? img('rearWithBootDoorOpenImages').first
+        img('bootDoorOpenImages').isNotEmpty
+            ? img('bootDoorOpenImages').first
             : '',
     // divided
     rearBumperImages: [...rbLhs45, ...rbRhs45, ...rbImgs],
@@ -564,7 +564,7 @@ CarModel buildCarModelFromForm(
     lhsQuarterPanelWithRearDoorOpenImages: lhsQPWithDoorOpen,
     lhsQuarterPanelWithRearDoorClosedImages: lhsQPWithDoorClosed,
     rearMainImages: img('rearMainImages'),
-    rearWithBootDoorOpenImages: img('rearWithBootDoorOpenImages'),
+    bootDoorOpenImages: img('bootDoorOpenImages'),
     bootDoorImages: img('bootDoorImages'),
     rearBumperLhs45DegreeImages: rbLhs45,
     rearBumperRhs45DegreeImages: rbRhs45,

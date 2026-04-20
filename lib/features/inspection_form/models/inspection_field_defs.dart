@@ -293,7 +293,7 @@ class InspectionFieldDefs {
         ]),
         F.img('frontBumperLhs45DegreeImages', 'Front Bumper LHS 45'),
         F.img('frontBumperRhs45DegreeImages', 'Front Bumper RHS 45'),
-        F.img('frontBumperImages', 'Front Bumper Image', optional: true),
+        // F.img('frontBumperImages', 'Front Bumper Image', optional: true),
         F.multi('lhsHeadlamp', 'LHS Headlamp', [
           'OK',
           'Broken',
@@ -458,7 +458,7 @@ class InspectionFieldDefs {
         ]),
         F.img('rearBumperLhs45DegreeImages', 'Rear Bumper LHS 45'),
         F.img('rearBumperRhs45DegreeImages', 'Rear Bumper RHS 45'),
-        F.img('rearBumperImages', 'Rear Bumper Image'),
+        // F.img('rearBumperImages', 'Rear Bumper Image'),
         F.multi('lhsTailLamp', 'LHS Tail Lamp', ['OK', 'Broken', 'Fogged']),
         F.img('lhsTailLampImages', 'LHS Tail Lamp Image'),
         F.multi('lhsRearFogLamp', 'LHS Rear Fog Lamp', [
@@ -492,7 +492,7 @@ class InspectionFieldDefs {
           'Replaced',
         ]),
         F.img('bootDoorImages', 'Boot Door Image'), */
-        F.img('rearWithBootDoorOpenImages', 'Boot Door Open Image'),
+        F.img('bootDoorOpenImages', 'Boot Door Open Image'),
         F.multi('spareWheel', 'Spare Wheel', ['Available', 'Not Available']),
         F.img('spareWheelImages', 'Spare Wheel Image'),
         F.multi('spareTyre', 'Spare Tyre', [
