@@ -484,15 +484,16 @@ class InspectionFieldDefs {
           'Replaced',
         ]),
         F.img('rearWindshieldImages', 'Rear Windshield Image'),
-        /* F.multi('bootDoor', 'Boot Door', [
+        F.multi('bootDoor', 'Boot Door', [
           'OK',
           'Dent',
           'Scratch',
           'Repaint',
           'Replaced',
         ]),
-        F.img('bootDoorImages', 'Boot Door Image'), */
+        // F.img('bootDoorImages', 'Boot Door Image'),
         F.img('bootDoorOpenImages', 'Boot Door Open Image'),
+        F.img('bootDoorClosedImages', 'Boot Door Closed Image'),
         F.multi('spareWheel', 'Spare Wheel', ['Available', 'Not Available']),
         F.img('spareWheelImages', 'Spare Wheel Image'),
         F.multi('spareTyre', 'Spare Tyre', [
@@ -772,13 +773,13 @@ class InspectionFieldDefs {
           'Crack',
           'Damaged',
         ]),
-        F.text('electricals', 'Electricals', optional: true),
-        F.text(
-          'commentsOnElectricals',
-          'Comments on Electricals',
-          optional: true,
-        ),
 
+        // F.text('electricals', 'Electricals', optional: true),
+        // F.text(
+        //   'commentsOnElectricals',
+        //   'Comments on Electricals',
+        //   optional: true,
+        // ),
         F.drop('inbuiltSpeaker', 'Inbuilt Speaker', [
           'OK',
           'Not Working',
@@ -993,8 +994,8 @@ class InspectionFieldDefs {
           'Synthetic',
           'Mixed',
         ]),
-        F.text('leatherSeats', 'Leather Seats', optional: true),
-        F.text('fabricSeats', 'Fabric Seats', optional: true),
+        // F.text('leatherSeats', 'Leather Seats', optional: true),
+        // F.text('fabricSeats', 'Fabric Seats', optional: true),
         F.multi('driverSeat', 'Driver Seat', ['OK', 'Torn', 'Stained', 'Worn']),
         F.multi('coDriverSeat', 'Co-Driver Seat', [
           'OK',

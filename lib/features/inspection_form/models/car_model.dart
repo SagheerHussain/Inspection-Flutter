@@ -309,6 +309,7 @@ class CarModel {
   final List<String> lhsQuarterPanelWithRearDoorClosedImages;
   final List<String> rearMainImages;
   final List<String> bootDoorOpenImages;
+  final List<String> bootDoorClosedImages;
   final List<String> bootDoorImages;
   final List<String> rearBumperLhs45DegreeImages;
   final List<String> rearBumperRhs45DegreeImages;
@@ -722,6 +723,7 @@ class CarModel {
     required this.lhsQuarterPanelWithRearDoorClosedImages,
     required this.rearMainImages,
     required this.bootDoorOpenImages,
+    required this.bootDoorClosedImages,
     required this.bootDoorImages,
     required this.rearBumperLhs45DegreeImages,
     required this.rearBumperRhs45DegreeImages,
@@ -1201,6 +1203,7 @@ class CarModel {
       bootDoorOpenImages: parseStringList(
         json["bootDoorOpenImages"] ?? json["rearWithBootDoorOpen"],
       ),
+      bootDoorClosedImages: parseStringList(json["bootDoorClosedImages"]),
       bootDoorImages: parseStringList(
         json["bootdoorimages"] ?? json["bootDoorImages"],
       ),
@@ -1534,7 +1537,15 @@ class CarModel {
     "lhsQuarterPanelImages": lhsQuarterPanelImages.map((x) => x).toList(),
     "rearMain": rearMain.map((x) => x).toList(),
     "rearWithBootDoorOpen":
-        bootDoorOpenImages.isNotEmpty ? bootDoorOpenImages.first : 'N/A',
+        [
+              ...bootDoorOpenImages,
+              ...bootDoorClosedImages,
+            ].where((url) => url.isNotEmpty).isNotEmpty
+            ? [
+              ...bootDoorOpenImages,
+              ...bootDoorClosedImages,
+            ].where((url) => url.isNotEmpty).join(',')
+            : 'N/A',
     "rearBumperImages": rearBumperImages.map((x) => x).toList(),
     "lhsTailLampImages": lhsTailLampImages,
     "rhsTailLampImages": rhsTailLampImages,
@@ -1721,6 +1732,7 @@ class CarModel {
         lhsQuarterPanelWithRearDoorClosedImages.map((x) => x).toList(),
     "rearMainImages": rearMainImages.map((x) => x).toList(),
     "bootDoorOpenImages": bootDoorOpenImages.map((x) => x).toList(),
+    "bootDoorClosedImages": bootDoorClosedImages.map((x) => x).toList(),
     // "bootdoorimages": bootDoorImages.map((x) => x).toList(),
     "rearBumperLhs45DegreeImages":
         rearBumperLhs45DegreeImages.map((x) => x).toList(),

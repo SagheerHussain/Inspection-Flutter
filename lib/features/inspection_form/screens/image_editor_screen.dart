@@ -30,6 +30,8 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
   bool _isSaving = false;
   int? _activeItemIndex;
   Size _imageDisplaySize = Size.zero;
+  double _originalWidth = 0;
+  double _originalHeight = 0;
 
   void _calculateImageSize(BoxConstraints constraints, ui.Image originalImage) {
     double imageWidth = originalImage.width.toDouble();
@@ -50,8 +52,12 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
     }
 
     Size newSize = Size(finalWidth, finalHeight);
-    if (_imageDisplaySize != newSize) {
-      Future.microtask(() => setState(() => _imageDisplaySize = newSize));
+    if (_imageDisplaySize != newSize || _originalWidth != imageWidth) {
+      Future.microtask(() => setState(() {
+        _imageDisplaySize = newSize;
+        _originalWidth = imageWidth;
+        _originalHeight = imageHeight;
+      }));
     }
   }
 
@@ -71,14 +77,25 @@ class _ImageEditorScreenState extends State<ImageEditorScreen> {
               as RenderRepaintBoundary?;
       if (boundary == null) throw "Capture boundary not found";
 
-      final ui.Image image = await boundary.toImage(pixelRatio: 1.5);
+      // Calculate the pixel ratio needed to capture at original resolution
+      // If original is 1920 and display is 400, ratio is 4.8
+      double ratio = 2.0; // Fallback
+      if (_imageDisplaySize.width > 0 && _originalWidth > 0) {
+        ratio = _originalWidth / _imageDisplaySize.width;
+      }
+
+      // Ensure we don't go too crazy but keep it high quality
+      // (Flutter sometimes struggles with ratios above 5.0 on low-end devices)
+      if (ratio < 2.0) ratio = 2.0;
+
+      final ui.Image image = await boundary.toImage(pixelRatio: ratio);
       final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
       if (byteData == null) throw "Failed to serialize image";
 
       final buffer = byteData.buffer.asUint8List();
       final tempDir = await getTemporaryDirectory();
       final filePath =
-          "${tempDir.path}/OTOBIX_EDITED_${DateTime.now().millisecondsSinceEpoch}.png";
+          "${tempDir.path}/OTOBIX_EDITED_${DateTime.now().millisecondsSinceEpoch}.jpg";
 
       await File(filePath).writeAsBytes(buffer);
       if (mounted) Navigator.of(context).pop(filePath);

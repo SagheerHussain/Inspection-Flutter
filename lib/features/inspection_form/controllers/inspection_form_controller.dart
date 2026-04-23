@@ -606,6 +606,7 @@ class InspectionFormController extends GetxController {
       'lhsRearWheelImages',
       'rearMainImages',
       'bootDoorOpenImages',
+      'bootDoorClosedImages',
       'rhsFullViewImages',
       'rhsRearWheelImages',
       'rhsFrontWheelImages',
@@ -789,19 +790,30 @@ class InspectionFormController extends GetxController {
     final rhsApron = extractUrls(carData['rhsApronImages']);
     if (rhsApron.isNotEmpty) imageFiles['rhsApronImages'] = rhsApron;
 
-    // Boot Door Open: check multiple possible DB keys
+    // Boot Door Open & Closed: check multiple possible DB keys
     final bootOpenList = extractUrls(carData['rearWithBootDoorOpenImages']);
     final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages']);
+    final bootClosedList = extractUrls(carData['bootDoorClosedImages']);
 
     if (bootOpenList.isNotEmpty) {
       imageFiles['bootDoorOpenImages'] = bootOpenList;
     } else if (bootOpenListAlt.isNotEmpty) {
       imageFiles['bootDoorOpenImages'] = bootOpenListAlt;
-    } else {
-      // Fallback: use the single-string field rearWithBootDoorOpen
-      final rearBoot = carData['rearWithBootDoorOpen'];
-      if (rearBoot is String && rearBoot.startsWith('http')) {
-        imageFiles['bootDoorOpenImages'] = [rearBoot];
+    }
+
+    if (bootClosedList.isNotEmpty) {
+      imageFiles['bootDoorClosedImages'] = bootClosedList;
+    }
+
+    // Fallback: use the single-string field rearWithBootDoorOpen which could be comma-separated
+    final rearBoot = carData['rearWithBootDoorOpen'];
+    if (rearBoot is String && rearBoot.isNotEmpty) {
+      final parts = rearBoot.split(',').map((e) => e.trim()).where((url) => url.startsWith('http')).toList();
+      if ((imageFiles['bootDoorOpenImages'] == null || imageFiles['bootDoorOpenImages']!.isEmpty) && parts.isNotEmpty) {
+        imageFiles['bootDoorOpenImages'] = [parts[0]];
+      }
+      if ((imageFiles['bootDoorClosedImages'] == null || imageFiles['bootDoorClosedImages']!.isEmpty) && parts.length > 1) {
+        imageFiles['bootDoorClosedImages'] = [parts[1]];
       }
     }
 
@@ -1252,8 +1264,10 @@ class InspectionFormController extends GetxController {
       if (picked != null) {
         String finalPath = picked.path;
 
-        // Navigation to ImageEditorScreen (Manual Blur & Watermarking) - ONLY for Main Body Photos
-        if (key == 'frontMainImages' || key == 'rearMainImages') {
+        // Navigation to ImageEditorScreen (Manual Blur & Watermarking) - ONLY for Primary Photos
+        if (key == 'frontMainImages' ||
+            key == 'rearMainImages' ||
+            key == 'dashboardImages') {
           final String? editedPath = await Get.to(
             () => ImageEditorScreen(imagePath: picked.path),
           );
