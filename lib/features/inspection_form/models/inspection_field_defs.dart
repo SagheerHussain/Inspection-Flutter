@@ -431,12 +431,12 @@ class InspectionFieldDefs {
         F.img(
           'lhsQuarterPanelWithRearDoorOpenImages',
           'LHS Quarter Panel With Rear Door Open Image',
-          maxImages: 1,
+          maxImages: 3,
         ),
         F.img(
           'lhsQuarterPanelWithRearDoorClosedImages',
           'LHS Quarter Panel With Rear Door Closed Image',
-          maxImages: 1,
+          maxImages: 3,
         ),
       ],
     ),
@@ -525,12 +525,12 @@ class InspectionFieldDefs {
         F.img(
           'rhsQuarterPanelWithRearDoorOpenImages',
           'RHS Quarter Panel With Rear Door Open Image',
-          maxImages: 1,
+          maxImages: 3,
         ),
         F.img(
           'rhsQuarterPanelWithRearDoorClosedImages',
           'RHS Quarter Panel With Rear Door Closed Image',
-          maxImages: 1,
+          maxImages: 3,
         ),
         F.multi('rhsRearAlloy', 'RHS Rear Wheel', [
           'OK',
