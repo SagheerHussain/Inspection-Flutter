@@ -40,14 +40,14 @@ class CreateNotificationController extends GetxController {
         title: "Welcome to OtoBix Inspection App!",
         body:
             "Your account has been successfully created. Start exploring our features and manage your vehicle inspections effortlessly.",
-        senderId: userController.user.value.id,
-        recipientIds: [user.id],
+        userId: user.id, // Using the new 'userId' field
         type: 'Account',
-        routeId: '',
-        isBroadcast: true,
-        route: TRoutes.notificationDetails,
-        seenBy: {},
-        seenAt: null,
+        isRead: false,
+        isGlobal: true,
+        data: {
+          'route': TRoutes.notificationDetails,
+          'routeId': '',
+        },
         createdAt: DateTime.now(),
       );
 

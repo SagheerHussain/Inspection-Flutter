@@ -17,9 +17,18 @@ class NotificationDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dark = THelperFunctions.isDarkMode(context);
-    final controller = Get.put(NotificationController());
-    controller.selectedNotification.value = Get.arguments ?? NotificationModel.empty();
-    controller.selectedNotificationId.value = Get.parameters['id'] ?? '';
+    final controller = NotificationController.instance;
+
+    // Set from arguments if provided
+    if (Get.arguments is NotificationModel) {
+      controller.selectedNotification.value = Get.arguments as NotificationModel;
+    }
+    final paramId = Get.parameters['id'];
+    if (paramId != null && paramId.isNotEmpty) {
+      controller.selectedNotificationId.value = paramId;
+    } else {
+      controller.selectedNotificationId.value = controller.selectedNotification.value.id;
+    }
 
     // Initialize the controller data outside the build method
     WidgetsBinding.instance.addPostFrameCallback((_) => controller.init());
@@ -30,7 +39,13 @@ class NotificationDetailScreen extends StatelessWidget {
         showSkipButton: false,
         showActions: false,
         showBackArrow: true,
-        leadingOnPressed: () => Get.offNamed(TRoutes.notification),
+        leadingOnPressed: () {
+          if (Get.previousRoute.isEmpty || Get.previousRoute == TRoutes.notification) {
+             Get.back();
+          } else {
+             Get.offNamed(TRoutes.notification);
+          }
+        },
       ),
       body: Padding(
         padding: const EdgeInsets.all(TSizes.defaultSpace),
@@ -39,38 +54,59 @@ class NotificationDetailScreen extends StatelessWidget {
             return const Center(child: CircularProgressIndicator());
           }
 
+          final notification = controller.selectedNotification.value;
+
           return TRoundedContainer(
             backgroundColor: dark ? TColors.dark : TColors.white,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (controller.selectedNotification.value.type.isNotEmpty)
+                if (notification.type.isNotEmpty)
                   TRoundedContainer(
                     padding: const EdgeInsets.symmetric(vertical: TSizes.sm, horizontal: TSizes.sm),
-                    backgroundColor: TColors.primary,
-                    child: Text(controller.selectedNotification.value.type, style: Theme.of(context).textTheme.labelMedium!.apply(color: Colors.black)),
+                    backgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.15),
+                    child: Text(
+                      notification.type.toUpperCase().replaceAll('_', ' '), 
+                      style: Theme.of(context).textTheme.labelMedium!.apply(color: const Color(0xFF6C63FF)),
+                    ),
                   ),
                 const SizedBox(height: TSizes.spaceBtwItems),
                 Text('Title', style: Theme.of(context).textTheme.labelMedium),
+                const SizedBox(height: 4),
                 Text(
-                  controller.selectedNotification.value.title,
-                  style: Theme.of(context).textTheme.titleMedium!.apply(color: dark ? Colors.white : Colors.blue),
+                  notification.title,
+                  style: Theme.of(context).textTheme.titleLarge!.apply(color: dark ? Colors.white : Colors.black87),
+                ),
+                const SizedBox(height: TSizes.spaceBtwItems),
+                Text('Date', style: Theme.of(context).textTheme.labelMedium),
+                const SizedBox(height: 4),
+                Text(
+                  notification.formattedDate,
+                  style: Theme.of(context).textTheme.bodyMedium!.apply(color: Colors.grey),
                 ),
                 const SizedBox(height: TSizes.spaceBtwItems),
                 Text('Message', style: Theme.of(context).textTheme.labelMedium),
-                Text(controller.selectedNotification.value.body, style: Theme.of(context).textTheme.bodyMedium),
+                const SizedBox(height: 4),
+                Text(
+                  notification.body, 
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
                 const SizedBox(height: TSizes.spaceBtwSections),
 
-                // Notification Click event
-                if (controller.selectedNotification.value.route.isNotEmpty &&
-                    controller.selectedNotification.value.route != TRoutes.notification &&
-                    controller.selectedNotification.value.route != TRoutes.notificationDetails)
+                // Notification Click event (if route is in data)
+                if (notification.data.containsKey('route') && 
+                    notification.data['route']?.toString().isNotEmpty == true &&
+                    notification.data['route'] != TRoutes.notification &&
+                    notification.data['route'] != TRoutes.notificationDetails)
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed:
-                          () => Get.toNamed(controller.selectedNotification.value.route, parameters: {'id': controller.selectedNotification.value.routeId}),
-                      label: const Text('Redirect'),
+                      onPressed: () {
+                        final route = notification.data['route'].toString();
+                        final routeId = notification.data['routeId']?.toString() ?? '';
+                        Get.toNamed(route, parameters: {'id': routeId});
+                      },
+                      label: const Text('View Details'),
                       icon: const Icon(Iconsax.arrow_right),
                     ),
                   ),

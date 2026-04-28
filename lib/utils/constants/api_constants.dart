@@ -119,4 +119,19 @@ class ApiConstants {
       '${baseUrl}inspection/car/upload-car-video-to-cloudinary';
   static String get deleteVideoUrl =>
       '${baseUrl}inspection/car/delete-video-from-cloudinary';
+
+  // ──────────────────────────────────────────
+  // NOTIFICATIONS ENDPOINTS
+  // ──────────────────────────────────────────
+  static String notificationsListUrl({required String userId, int page = 1, int limit = 30}) =>
+      '${baseUrl}user/notifications/notifications-list?userId=$userId&page=$page&limit=$limit';
+
+  static String notificationDetailsUrl({required String userId, required String notificationId}) =>
+      '${baseUrl}user/notifications/notification-details?userId=$userId&notificationId=$notificationId';
+
+  static String get markNotificationAsReadUrl =>
+      '${baseUrl}user/notifications/mark-notification-as-read';
+
+  static String get markAllNotificationsAsReadUrl =>
+      '${baseUrl}user/notifications/mark-all-notifications-as-read';
 }
