@@ -215,6 +215,20 @@ class InspectionOffloadService extends GetxService {
     _processQueue();
   }
 
+  /// Clear all items from the queue.
+  void clearQueue() {
+    queue.clear();
+    queue.refresh();
+    _saveQueue();
+  }
+
+  /// Remove specific items from the queue.
+  void removeItems(List<String> appointmentIds) {
+    queue.removeWhere((i) => appointmentIds.contains(i.appointmentId));
+    queue.refresh();
+    _saveQueue();
+  }
+
   // ── Processing ──────────────────────────────────────────────────────────
 
   Future<void> _processQueue() async {

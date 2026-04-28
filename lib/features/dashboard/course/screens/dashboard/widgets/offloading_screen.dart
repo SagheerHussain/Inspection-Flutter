@@ -6,8 +6,16 @@ import '../../../../../../data/services/offline/inspection_offload_service.dart'
 
 /// Screen showing all queued/syncing/done inspections from the offload queue.
 /// Accessible by tapping the "Off-Loading" dashboard card.
-class OffloadingScreen extends StatelessWidget {
+class OffloadingScreen extends StatefulWidget {
   const OffloadingScreen({super.key});
+
+  @override
+  State<OffloadingScreen> createState() => _OffloadingScreenState();
+}
+
+class _OffloadingScreenState extends State<OffloadingScreen> {
+  final RxBool isSelectionMode = false.obs;
+  final RxList<String> selectedIds = <String>[].obs;
 
   @override
   Widget build(BuildContext context) {
@@ -48,8 +56,56 @@ class OffloadingScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          // Overall progress indicator in app bar
+          // ── Selection Mode Actions ──
           Obx(() {
+            if (!isSelectionMode.value) {
+              try {
+                final svc = InspectionOffloadService.instance;
+                if (svc.queue.isEmpty) return const SizedBox.shrink();
+                return TextButton(
+                  onPressed: () => _showClearConfirmation(context),
+                  child: const Text(
+                    'Clear List',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                );
+              } catch (_) {
+                return const SizedBox.shrink();
+              }
+            } else {
+              return Row(
+                children: [
+                  TextButton(
+                    onPressed: () {
+                      isSelectionMode.value = false;
+                      selectedIds.clear();
+                    },
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: selectedIds.isEmpty
+                        ? null
+                        : () => _deleteSelected(context),
+                    icon: Icon(
+                      Icons.delete_sweep_rounded,
+                      color: selectedIds.isEmpty ? Colors.grey : Colors.red,
+                    ),
+                  ),
+                ],
+              );
+            }
+          }),
+
+          // Overall progress indicator
+          Obx(() {
+            if (isSelectionMode.value) return const SizedBox.shrink();
             try {
               final svc = InspectionOffloadService.instance;
               final progress = svc.overallProgress;
@@ -59,15 +115,13 @@ class OffloadingScreen extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 16),
                 child: Center(
                   child: SizedBox(
-                    width: 32,
-                    height: 32,
+                    width: 24,
+                    height: 24,
                     child: CircularProgressIndicator(
                       value: progress,
-                      strokeWidth: 3,
+                      strokeWidth: 2.5,
                       backgroundColor: Colors.grey.withValues(alpha: 0.2),
-                      valueColor: const AlwaysStoppedAnimation(
-                        Color(0xFF6C63FF),
-                      ),
+                      valueColor: const AlwaysStoppedAnimation(Color(0xFF6C63FF)),
                     ),
                   ),
                 ),
@@ -122,10 +176,125 @@ class OffloadingScreen extends StatelessWidget {
           itemBuilder: (context, index) {
             // Show newest first
             final item = svc!.queue[svc.queue.length - 1 - index];
-            return _OffloadItemCard(item: item, dark: dark);
+            return Obx(() => _OffloadItemCard(
+                  item: item,
+                  dark: dark,
+                  isSelectionMode: isSelectionMode.value,
+                  isSelected: selectedIds.contains(item.appointmentId),
+                  onToggle: () {
+                    if (selectedIds.contains(item.appointmentId)) {
+                      selectedIds.remove(item.appointmentId);
+                    } else {
+                      selectedIds.add(item.appointmentId);
+                    }
+                  },
+                ));
           },
         );
       }),
+    );
+  }
+
+  void _deleteSelected(BuildContext context) {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('Delete ${selectedIds.length} items?'),
+        content: const Text('This will remove the selected items from the queue.'),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              InspectionOffloadService.instance.removeItems(selectedIds.toList());
+              selectedIds.clear();
+              isSelectionMode.value = false;
+              Get.back();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showClearConfirmation(BuildContext context) {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Clear List Options',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: const Text(
+          'Choose how you want to clear the off-loading queue.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Get.back();
+              isSelectionMode.value = true;
+            },
+            child: const Text(
+              'Select Items',
+              style: TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.w900),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _showFinalClearAllConfirmation(context),
+            child: const Text(
+              'Clear All',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFinalClearAllConfirmation(BuildContext context) {
+    Get.dialog(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Confirm Clear All',
+          style: TextStyle(fontWeight: FontWeight.w900),
+        ),
+        content: const Text(
+          'Are you sure you want to permanently remove all items from the queue? This cannot be undone.',
+          style: TextStyle(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              InspectionOffloadService.instance.clearQueue();
+              Get.back(); // Close this confirmation dialog
+              Get.back(); // Close the initial options dialog
+            },
+            child: const Text(
+              'Yes, Clear All',
+              style: TextStyle(color: Colors.red, fontWeight: FontWeight.w900),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -133,8 +302,17 @@ class OffloadingScreen extends StatelessWidget {
 class _OffloadItemCard extends StatelessWidget {
   final OffloadQueueItem item;
   final bool dark;
+  final bool isSelectionMode;
+  final bool isSelected;
+  final VoidCallback onToggle;
 
-  const _OffloadItemCard({required this.item, required this.dark});
+  const _OffloadItemCard({
+    required this.item,
+    required this.dark,
+    this.isSelectionMode = false,
+    this.isSelected = false,
+    required this.onToggle,
+  });
 
   Color get _statusColor {
     switch (item.status) {
@@ -182,23 +360,29 @@ class _OffloadItemCard extends StatelessWidget {
     final bool isDone = item.status == OffloadStatus.done;
     final bool isFailed = item.status == OffloadStatus.failed;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: dark ? const Color(0xFF141828) : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: _statusColor.withValues(alpha: 0.08),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+    return GestureDetector(
+      onTap: isSelectionMode ? onToggle : null,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: isSelected
+              ? (dark ? const Color(0xFF20253D) : const Color(0xFFF0F2FF))
+              : (dark ? const Color(0xFF141828) : Colors.white),
+          boxShadow: [
+            BoxShadow(
+              color: _statusColor.withValues(alpha: 0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
+            ),
+          ],
+          border: Border.all(
+            color: isSelected
+                ? const Color(0xFF6C63FF).withValues(alpha: 0.5)
+                : _statusColor.withValues(alpha: isDone ? 0.3 : 0.15),
+            width: isSelected ? 1.5 : 1,
           ),
-        ],
-        border: Border.all(
-          color: _statusColor.withValues(alpha: isDone ? 0.3 : 0.15),
-          width: 1,
         ),
-      ),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -207,6 +391,21 @@ class _OffloadItemCard extends StatelessWidget {
             // ── Header: appointment ID + status ──
             Row(
               children: [
+                if (isSelectionMode) ...[
+                  Checkbox(
+                    value: isSelected,
+                    onChanged: (_) => onToggle(),
+                    activeColor: const Color(0xFF6C63FF),
+                    side: BorderSide(
+                      color: dark ? Colors.white30 : Colors.black26,
+                      width: 1.5,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                ],
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -366,10 +565,11 @@ class _OffloadItemCard extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: OutlinedButton.icon(
-                  onPressed: () =>
-                      InspectionOffloadService.instance.retryItem(
-                    item.appointmentId,
-                  ),
+                  onPressed: isSelectionMode
+                      ? onToggle
+                      : () => InspectionOffloadService.instance.retryItem(
+                            item.appointmentId,
+                          ),
                   icon: const Icon(Icons.refresh_rounded, size: 16),
                   label: const Text('Retry'),
                   style: OutlinedButton.styleFrom(
@@ -396,6 +596,7 @@ class _OffloadItemCard extends StatelessWidget {
           ],
         ),
       ),
+    ),
     );
   }
 
