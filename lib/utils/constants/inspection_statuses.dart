@@ -7,6 +7,7 @@ class InspectionStatuses {
   static const String cancel = 'Cancelled';
   static const String inspected = 'Inspected';
   static const String reInspection = 'Re-Inspection';
+  static const String rejected = 'Rejected';
 
   static const List<String> all = [
     running,
@@ -15,5 +16,6 @@ class InspectionStatuses {
     cancel,
     inspected,
     reInspection,
+    rejected,
   ];
 }

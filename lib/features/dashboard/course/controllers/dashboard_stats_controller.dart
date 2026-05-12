@@ -26,6 +26,7 @@ class DashboardStatsController extends GetxController {
   final reScheduledCount = 0.obs;
   final inspectedCount = 0.obs;
   final canceledCount = 0.obs;
+  final rejectedCount = 0.obs;
 
   // ── Countdown states ──
   final scheduledCountdownText = ''.obs;
@@ -74,24 +75,28 @@ class DashboardStatsController extends GetxController {
     final raw = _storage.read(_cacheKey);
     if (raw == null || raw is! Map) return;
 
-    scheduledCount.value   = raw['Scheduled']    ?? 0;
-    runningCount.value     = raw['Running']       ?? 0;
-    inspectedCount.value   = raw['Inspected']     ?? 0;
-    canceledCount.value    = raw['Cancelled']     ?? 0;
-    reScheduledCount.value = raw['Re-Scheduled']  ?? 0;
+    scheduledCount.value = raw['Scheduled'] ?? 0;
+    runningCount.value = raw['Running'] ?? 0;
+    inspectedCount.value = raw['Inspected'] ?? 0;
+    canceledCount.value = raw['Cancelled'] ?? 0;
+    rejectedCount.value = raw['Rejected'] ?? 0;
+    reScheduledCount.value = raw['Re-Scheduled'] ?? 0;
     reInspectionCount.value = raw['Re-Inspection'] ?? 0;
 
-    debugPrint('⚡ [Dashboard] Restored counts from cache: Scheduled=${raw['Scheduled']}, '
-        'Running=${raw['Running']}, Inspected=${raw['Inspected']}');
+    debugPrint(
+      '⚡ [Dashboard] Restored counts from cache: Scheduled=${raw['Scheduled']}, '
+      'Running=${raw['Running']}, Inspected=${raw['Inspected']}',
+    );
   }
 
   /// Write current counts to disk after a successful fetch.
   void _persistToCache() {
     _storage.write(_cacheKey, {
-      'Scheduled':    scheduledCount.value,
-      'Running':      runningCount.value,
-      'Inspected':    inspectedCount.value,
-      'Cancelled':    canceledCount.value,
+      'Scheduled': scheduledCount.value,
+      'Running': runningCount.value,
+      'Inspected': inspectedCount.value,
+      'Cancelled': canceledCount.value,
+      'Rejected': rejectedCount.value,
       'Re-Scheduled': reScheduledCount.value,
       'Re-Inspection': reInspectionCount.value,
     });
@@ -118,6 +123,7 @@ class DashboardStatsController extends GetxController {
         'Re-Inspection',
         'Inspected',
         'Cancelled',
+        'Rejected',
       ];
 
       final Map<String, int> totals = {};
@@ -127,9 +133,7 @@ class DashboardStatsController extends GetxController {
       await Future.wait(
         fetchStatuses.map((status) async {
           try {
-            final Map<String, dynamic> body = {
-              "inspectionStatus": status,
-            };
+            final Map<String, dynamic> body = {"inspectionStatus": status};
 
             final user = UserController.instance.user.value;
             if (user.id != 'superadmin') {
@@ -168,6 +172,7 @@ class DashboardStatsController extends GetxController {
       runningCount.value = totals['Running'] ?? 0;
       inspectedCount.value = totals['Inspected'] ?? 0;
       canceledCount.value = totals['Cancelled'] ?? 0;
+      rejectedCount.value = totals['Rejected'] ?? 0;
       reScheduledCount.value = totals['Re-Scheduled'] ?? 0;
       reInspectionCount.value = totals['Re-Inspection'] ?? 0;
 
@@ -175,7 +180,6 @@ class DashboardStatsController extends GetxController {
       _persistToCache();
 
       _startCountdown();
-
     } catch (e) {
       // debugPrint('❌ Dashboard stats fetch error: $e');
     } finally {

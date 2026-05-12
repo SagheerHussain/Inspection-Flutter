@@ -61,6 +61,17 @@ class DashboardTopCourses extends StatelessWidget {
                 : [const Color(0xFFC8E6C9), const Color(0xFFA5D6A7)],
       ),
       _QuickLinkItem(
+        title: "Rejected",
+        countObs: stats.rejectedCount,
+        icon: Icons.assignment_late_rounded,
+        iconColor: const Color(0xFFFB8C00),
+        statusFilter: InspectionStatuses.rejected,
+        gradientColors:
+            dark
+                ? [const Color(0xFF2E1A05), const Color(0xFF3D2307)]
+                : [const Color(0xFFFFE0B2), const Color(0xFFFFCC80)],
+      ),
+      _QuickLinkItem(
         title: "Canceled",
         countObs: stats.canceledCount,
         icon: Icons.cancel_rounded,

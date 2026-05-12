@@ -60,6 +60,12 @@ class InspectionFormController extends GetxController {
     return isReStatus || isReSource;
   }
 
+  bool get isRejected {
+    final s =
+        schedule?.inspectionStatus.toLowerCase().replaceAll('-', '') ?? '';
+    return s == 'rejected';
+  }
+
   /// Stores the original data snapshot fetched from the API for Re-Inspection
   /// (used for the preview dialog diff)
   Map<String, dynamic> _originalData = {};
@@ -204,9 +210,9 @@ class InspectionFormController extends GetxController {
       final snapshot = _storage.read(_snapshotKey);
       final user = UserController.instance.user.value;
 
-      // Logic: Use draft only if NOT in Re-Inspection mode.
-      // For Re-Inspection, we always want to fetch previous data from the API first.
-      if (snapshot != null && snapshot is Map && !isReInspection) {
+      // Logic: Use draft only if NOT in Re-Inspection or Rejected mode.
+      // For these, we always want to fetch previous data from the API first.
+      if (snapshot != null && snapshot is Map && !isReInspection && !isRejected) {
         debugPrint('📂 Found local draft for $appointmentId');
         final cachedId =
             snapshot['_id']?.toString() ?? snapshot['id']?.toString();
@@ -287,9 +293,9 @@ class InspectionFormController extends GetxController {
 
       // ── STEP 2: NO DRAFT FOUND — PROCEED WITH DATA FETCHING ──
 
-      // ── RE-INSPECTION & SUPERADMIN EDIT FLOW ──
+      // ── RE-INSPECTION, REJECTED & SUPERADMIN EDIT FLOW ──
       // API data takes priority ONLY if no local draft exists.
-      if (isReInspection || user.id == 'superadmin') {
+      if (isReInspection || isRejected || user.id == 'superadmin') {
         try {
           final response = await ApiService.get(
             ApiConstants.carDetailsUrl(appointmentId),
@@ -298,16 +304,28 @@ class InspectionFormController extends GetxController {
           final carData = response['carDetails'];
           if (carData != null && carData is Map<String, dynamic>) {
             _reInspectionCarId = carData['_id']?.toString();
-            _originalData = Map<String, dynamic>.from(carData);
             _normalizeCarDataToFormKeys(carData);
             inspectionData.value = InspectionFormModel.fromJson(carData);
             _preFillMedia(carData);
+
+            // Baseline for preview dialog: exact form keys and resolved images
+            _originalData = Map<String, dynamic>.from(inspectionData.value!.data);
+            imageFiles.forEach((key, paths) {
+              if (paths.isNotEmpty) {
+                final resolvedUrls = paths.map((p) {
+                  final cloudData = mediaCloudinaryData[p];
+                  return cloudData?['url'] ?? p;
+                }).toList();
+                _originalData[key] = resolvedUrls;
+              }
+            });
             await _saveSnapshot();
 
             TLoaders.successSnackBar(
-              title: 'Re-Inspection Data Loaded',
-              message:
-                  'Previous inspection data pre-filled. Update fields as needed.',
+              title: isRejected ? 'Rejected Lead Data Loaded' : 'Re-Inspection Data Loaded',
+              message: isRejected 
+                  ? 'Previous inspection data pre-filled. Please review and update.'
+                  : 'Previous inspection data pre-filled. Update fields as needed.',
             );
             _syncScheduleWithChanges();
             isLoading.value = false;
@@ -570,7 +588,6 @@ class InspectionFormController extends GetxController {
     // ── Image field mappings: API key → form key ──
     // The API stores images under legacy keys; the form expects new keys.
     final Map<String, String> imageMappings = {
-      'rcTaxToken': 'rcTokenImages',
       'insuranceCopy': 'insuranceImages',
       'bothKeys': 'duplicateKeyImages',
       'form26GdCopyIfRcIsLost': 'form26AndGdCopyIfRcIsLostImages',
@@ -670,21 +687,34 @@ class InspectionFormController extends GetxController {
     ];
 
     // Helper to extract URL list from a value
-    List<String> extractUrls(dynamic value) {
+    List<String> extractUrls(dynamic value, String keyName) {
       if (value == null) return [];
+      List<String> result = [];
       if (value is List) {
-        return value
-            .map((e) => e.toString())
+        result = value
+            .map((e) => e.toString().trim())
             .where((url) => url.startsWith('http'))
             .toList();
+      } else if (value is String && value.startsWith('http')) {
+        if (value.contains(',')) {
+          result = value
+              .split(',')
+              .map((e) => e.trim())
+              .where((url) => url.startsWith('http'))
+              .toList();
+        } else {
+          result = [value];
+        }
       }
-      if (value is String && value.startsWith('http')) return [value];
-      return [];
+      if (result.isNotEmpty && keyName.toLowerCase().contains('rc')) {
+        debugPrint('🔍 extractUrls for $keyName: $result');
+      }
+      return result;
     }
 
     // 1. Process mapped image keys
     imageMappings.forEach((apiKey, formKey) {
-      final urls = extractUrls(carData[apiKey]);
+      final urls = extractUrls(carData[apiKey], apiKey);
       if (urls.isNotEmpty) {
         imageFiles[formKey] = urls;
         carData[formKey] = urls; // also put in form data for consistency
@@ -693,7 +723,7 @@ class InspectionFormController extends GetxController {
 
     // 2. Process direct image keys
     for (final key in directImageKeys) {
-      final urls = extractUrls(carData[key]);
+      final urls = extractUrls(carData[key], key);
       if (urls.isNotEmpty) {
         imageFiles[key] = urls;
       }
@@ -701,7 +731,7 @@ class InspectionFormController extends GetxController {
 
     // 3. Handle split image fields
     // bonnetImages → bonnetClosedImages + bonnetOpenImages
-    final bonnetImgs = extractUrls(carData['bonnetImages']);
+    final bonnetImgs = extractUrls(carData['bonnetImages'], 'bonnetImages');
     if (bonnetImgs.isNotEmpty) {
       // First half → bonnetClosedImages, second half → bonnetOpenImages
       final mid = (bonnetImgs.length / 2).ceil();
@@ -711,32 +741,32 @@ class InspectionFormController extends GetxController {
       }
     }
     // Also check direct new-API keys
-    final bonnetClosed = extractUrls(carData['bonnetClosedImages']);
+    final bonnetClosed = extractUrls(carData['bonnetClosedImages'], 'bonnetClosedImages');
     if (bonnetClosed.isNotEmpty)
       imageFiles['bonnetClosedImages'] = bonnetClosed;
-    final bonnetOpen = extractUrls(carData['bonnetOpenImages']);
+    final bonnetOpen = extractUrls(carData['bonnetOpenImages'], 'bonnetOpenImages');
     if (bonnetOpen.isNotEmpty) imageFiles['bonnetOpenImages'] = bonnetOpen;
 
     // frontBumperImages → frontBumperLhs45DegreeImages + frontBumperRhs45DegreeImages + frontBumperImages
-    final fbLhs45 = extractUrls(carData['frontBumperLhs45DegreeImages']);
+    final fbLhs45 = extractUrls(carData['frontBumperLhs45DegreeImages'], 'frontBumperLhs45DegreeImages');
     if (fbLhs45.isNotEmpty)
       imageFiles['frontBumperLhs45DegreeImages'] = fbLhs45;
-    final fbRhs45 = extractUrls(carData['frontBumperRhs45DegreeImages']);
+    final fbRhs45 = extractUrls(carData['frontBumperRhs45DegreeImages'], 'frontBumperRhs45DegreeImages');
     if (fbRhs45.isNotEmpty)
       imageFiles['frontBumperRhs45DegreeImages'] = fbRhs45;
-    final fbMain = extractUrls(carData['frontBumperImages']);
+    final fbMain = extractUrls(carData['frontBumperImages'], 'frontBumperImages');
     if (fbMain.isNotEmpty &&
         imageFiles['frontBumperLhs45DegreeImages'] == null) {
       imageFiles['frontBumperImages'] = fbMain;
     }
 
     // rearBumperImages → rearBumperLhs45DegreeImages + rearBumperRhs45DegreeImages + rearBumperImages
-    final rbLhs45 = extractUrls(carData['rearBumperLhs45DegreeImages']);
+    final rbLhs45 = extractUrls(carData['rearBumperLhs45DegreeImages'], 'rearBumperLhs45DegreeImages');
     if (rbLhs45.isNotEmpty) imageFiles['rearBumperLhs45DegreeImages'] = rbLhs45;
-    final rbRhs45 = extractUrls(carData['rearBumperRhs45DegreeImages']);
+    final rbRhs45 = extractUrls(carData['rearBumperRhs45DegreeImages'], 'rearBumperRhs45DegreeImages');
     if (rbRhs45.isNotEmpty) imageFiles['rearBumperRhs45DegreeImages'] = rbRhs45;
     // Always populate the main rearBumperImages from DB if available
-    final rbMain = extractUrls(carData['rearBumperImages']);
+    final rbMain = extractUrls(carData['rearBumperImages'], 'rearBumperImages');
     if (rbMain.isNotEmpty) {
       imageFiles['rearBumperImages'] = rbMain;
     }
@@ -760,11 +790,13 @@ class InspectionFormController extends GetxController {
     // Fallback if backend returned explicit flat keys
     final fallBackLhsOpen = extractUrls(
       carData['lhsQuarterPanelWithRearDoorOpenImages'],
+      'lhsQuarterPanelWithRearDoorOpenImages',
     );
     if (fallBackLhsOpen.isNotEmpty)
       imageFiles['lhsQuarterPanelWithRearDoorOpenImages'] = fallBackLhsOpen;
     final fallBackLhsClosed = extractUrls(
       carData['lhsQuarterPanelWithRearDoorClosedImages'],
+      'lhsQuarterPanelWithRearDoorClosedImages',
     );
     if (fallBackLhsClosed.isNotEmpty)
       imageFiles['lhsQuarterPanelWithRearDoorClosedImages'] = fallBackLhsClosed;
@@ -788,17 +820,19 @@ class InspectionFormController extends GetxController {
     // Fallback if backend returned explicit flat keys
     final fallBackRhsOpen = extractUrls(
       carData['rhsQuarterPanelWithRearDoorOpenImages'],
+      'rhsQuarterPanelWithRearDoorOpenImages',
     );
     if (fallBackRhsOpen.isNotEmpty)
       imageFiles['rhsQuarterPanelWithRearDoorOpenImages'] = fallBackRhsOpen;
     final fallBackRhsClosed = extractUrls(
       carData['rhsQuarterPanelWithRearDoorClosedImages'],
+      'rhsQuarterPanelWithRearDoorClosedImages',
     );
     if (fallBackRhsClosed.isNotEmpty)
       imageFiles['rhsQuarterPanelWithRearDoorClosedImages'] = fallBackRhsClosed;
 
     // apronLhsRhs → lhsApronImages + rhsApronImages
-    final apronAll = extractUrls(carData['apronLhsRhs']);
+    final apronAll = extractUrls(carData['apronLhsRhs'], 'apronLhsRhs');
     if (apronAll.isNotEmpty) {
       final mid = (apronAll.length / 2).ceil();
       imageFiles['lhsApronImages'] = apronAll.sublist(0, mid);
@@ -806,15 +840,15 @@ class InspectionFormController extends GetxController {
         imageFiles['rhsApronImages'] = apronAll.sublist(mid);
       }
     }
-    final lhsApron = extractUrls(carData['lhsApronImages']);
+    final lhsApron = extractUrls(carData['lhsApronImages'], 'lhsApronImages');
     if (lhsApron.isNotEmpty) imageFiles['lhsApronImages'] = lhsApron;
-    final rhsApron = extractUrls(carData['rhsApronImages']);
+    final rhsApron = extractUrls(carData['rhsApronImages'], 'rhsApronImages');
     if (rhsApron.isNotEmpty) imageFiles['rhsApronImages'] = rhsApron;
 
     // Boot Door Open & Closed: check multiple possible DB keys
-    final bootOpenList = extractUrls(carData['rearWithBootDoorOpenImages']);
-    final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages']);
-    final bootClosedList = extractUrls(carData['bootDoorClosedImages']);
+    final bootOpenList = extractUrls(carData['rearWithBootDoorOpenImages'], 'rearWithBootDoorOpenImages');
+    final bootOpenListAlt = extractUrls(carData['bootDoorOpenImages'], 'bootDoorOpenImages');
+    final bootClosedList = extractUrls(carData['bootDoorClosedImages'], 'bootDoorClosedImages');
 
     if (bootOpenList.isNotEmpty) {
       imageFiles['bootDoorOpenImages'] = bootOpenList;
@@ -879,7 +913,7 @@ class InspectionFormController extends GetxController {
 
     // Also check individual airbag image keys from new API format
     for (final key in airbagKeys) {
-      final urls = extractUrls(carData[key]);
+      final urls = extractUrls(carData[key], key);
       if (urls.isNotEmpty) imageFiles[key] = urls;
     }
 
@@ -2149,9 +2183,9 @@ class InspectionFormController extends GetxController {
     }
 
     // ══════════════════════════════════════════════════════════
-    // RE-INSPECTION FLOW: Show Preview Dialog first
+    // RE-INSPECTION & REJECTED FLOW: Show Preview Dialog first
     // ══════════════════════════════════════════════════════════
-    if (isReInspection && user.id != 'superadmin') {
+    if ((isReInspection || isRejected) && user.id != 'superadmin') {
       _showReInspectionPreviewDialog(data);
       return;
     }
@@ -2483,9 +2517,9 @@ class InspectionFormController extends GetxController {
                     size: 36,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Re-Inspection Preview',
-                    style: TextStyle(
+                  Text(
+                    isRejected ? 'Rejected Lead Preview' : 'Re-Inspection Preview',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -2996,6 +3030,37 @@ class InspectionFormController extends GetxController {
       // 3. Convert CarModel to JSON payload
       final payload = carModel.toJson();
 
+      // Upload any new local images to Cloudinary before sending
+      for (final key in imageFiles.keys) {
+        final paths = imageFiles[key]!;
+        for (int i = 0; i < paths.length; i++) {
+          final p = paths[i];
+          if (!p.startsWith('http') && mediaCloudinaryData[p] == null) {
+            final isVideo = p.endsWith('.mp4') || p.endsWith('.mov') || p.endsWith('.avi');
+            final uploadUrl = isVideo ? ApiConstants.uploadVideoUrl : ApiConstants.uploadImagesUrl;
+            final fileKey = isVideo ? 'video' : 'imagesList';
+            try {
+              final file = await http.MultipartFile.fromPath(fileKey, p);
+              final response = await ApiService.multipartPost(
+                url: uploadUrl,
+                fields: {'appointmentId': appointmentId},
+                files: [file],
+              );
+              final resultData = response['data'] ?? response;
+              String? url;
+              if (resultData['files'] is List && (resultData['files'] as List).isNotEmpty) {
+                url = resultData['files'][0]['url']?.toString();
+              } else {
+                url = (resultData['originalUrl'] ?? resultData['optimizedUrl'] ?? resultData['url'])?.toString();
+              }
+              if (url != null) mediaCloudinaryData[p] = {'url': url};
+            } catch (e) {
+              debugPrint('⚠️ Sync upload failed for $p: $e');
+            }
+          }
+        }
+      }
+
       // Add image URLs from Cloudinary uploads
       imageFiles.forEach((key, paths) {
         if (paths.isNotEmpty) {
@@ -3074,20 +3139,21 @@ class InspectionFormController extends GetxController {
         payload['carId'] = _reInspectionCarId;
       }
 
-      // Set status to Inspected on successful Re-Inspection submit
-      payload['status'] = 'Inspected';
-      payload['inspectionStatus'] = 'Inspected';
+      // Set status based on flow type
+      if (isRejected) {
+        payload['status'] = 'Rejected';
+        payload['inspectionStatus'] = 'Rejected';
+        payload['approvalStatus'] = 'under review';
+      } else {
+        payload['status'] = 'Inspected';
+        payload['inspectionStatus'] = 'Inspected';
+      }
 
       // Keep the _id for the update API
       // Remove objectId only
       payload.remove('objectId');
 
-      // debugPrint('📡 Submitting Re-Inspection update via PUT...');
-      // debugPrint('📦 Payload keys: ${payload.keys.toList()}');
-      // debugPrint('🌐 URL: ${ApiConstants.carUpdateUrl}');
-      // debugPrint('🔑 carId: ${payload['carId']}');
-
-      // 4. PUT to the update API
+      // 4. Call the update API
       final response = await ApiService.put(ApiConstants.carUpdateUrl, payload);
 
       // debugPrint('✅ API Response: $response');
@@ -3109,13 +3175,15 @@ class InspectionFormController extends GetxController {
           final userRole =
               storage.read('USER_ROLE')?.toString() ?? 'Inspection Engineer';
 
+          final targetStatus = 'Inspected';
+          
           final statusBody = {
             'telecallingId': schedule!.id,
             'appointmentId': appointmentId,
             'changedBy': userId,
             'source': userRole,
-            'inspectionStatus': 'Inspected',
-            'status': 'Inspected',
+            'inspectionStatus': targetStatus,
+            'status': targetStatus,
             'remarks': schedule!.remarks ?? '',
             'version': _appVersion,
           };

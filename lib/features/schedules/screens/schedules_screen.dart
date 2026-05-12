@@ -325,6 +325,7 @@ class _SchedulesScreenState extends State<SchedulesScreen> {
     if (status == InspectionStatuses.inspected)
       return Icons.check_circle_outline_rounded;
     if (status == InspectionStatuses.cancel) return Icons.cancel_outlined;
+    if (status == InspectionStatuses.rejected) return Icons.assignment_late_outlined;
     return Icons.calendar_today_rounded;
   }
 }
@@ -356,6 +357,7 @@ class _ScheduleCard extends StatelessWidget {
         normalized == 'reinspected')
       return const Color(0xFF00BFA5);
     if (status == InspectionStatuses.cancel) return const Color(0xFFF44336);
+    if (status == InspectionStatuses.rejected) return const Color(0xFFFB8C00);
     return const Color(0xFF9E9E9E);
   }
 
@@ -803,6 +805,59 @@ class _ScheduleCard extends StatelessWidget {
                       ),
                   ],
                 ),
+
+                // ── Remarks Section ──
+                if (schedule.remarks.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: dark
+                          ? Colors.white.withValues(alpha: 0.04)
+                          : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: dark
+                            ? Colors.white.withValues(alpha: 0.08)
+                            : const Color(0xFFE2E8F0),
+                        width: 0.5,
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.comment_rounded,
+                              size: 14,
+                              color: dark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Remarks',
+                              style: txtTheme.labelSmall?.copyWith(
+                                color: dark ? Colors.grey.shade400 : const Color(0xFF64748B),
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          schedule.remarks,
+                          style: txtTheme.bodySmall?.copyWith(
+                            color: dark ? Colors.white70 : const Color(0xFF1E293B),
+                            fontSize: 12,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 14),
 
                 // ── ROW 4: Inspection Date & Time with countdown ──
@@ -1175,8 +1230,9 @@ class _ScheduleCard extends StatelessWidget {
     final isRunning = normalizedStatus == 'running';
     final isReinspection =
         normalizedStatus == 'reinspection' || normalizedStatus == 'reinspected';
+    final isRejected = normalizedStatus == 'rejected';
 
-    if (isScheduled || isRescheduled || isRunning || isReinspection) {
+    if (isScheduled || isRescheduled || isRunning || isReinspection || isRejected) {
       // Primary Action (Play / Resume)
       items.add(
         _actionIcon(
