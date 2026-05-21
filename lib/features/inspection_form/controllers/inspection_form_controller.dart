@@ -3143,7 +3143,7 @@ class InspectionFormController extends GetxController {
       if (isRejected) {
         payload['status'] = 'Rejected';
         payload['inspectionStatus'] = 'Rejected';
-        payload['approvalStatus'] = 'under review';
+        payload['approvalStatus'] = 'Under Review';
       } else {
         payload['status'] = 'Inspected';
         payload['inspectionStatus'] = 'Inspected';
@@ -3184,6 +3184,7 @@ class InspectionFormController extends GetxController {
             'source': userRole,
             'inspectionStatus': targetStatus,
             'status': targetStatus,
+            if (isRejected) 'approvalStatus': 'Under Review',
             'remarks': schedule!.remarks ?? '',
             'version': _appVersion,
           };
